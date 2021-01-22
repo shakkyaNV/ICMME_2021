@@ -1,0 +1,74 @@
+---
+title: "ICMME"
+author: "eNVy"
+date: "'r Sys.Date()'"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NULL)
+```
+
+```{r libs}
+library(tidyverse)
+```
+
+### Import all files
+
+```{r}
+# import all %>% nest
+df_list <- list.files(path = "Data/", 
+                                pattern = "*.csv", 
+                                full.names = T)
+nested_tbl <- map(df_list, read_csv)
+
+index_list <- df_list %>% 
+  str_remove(pattern = "Data/df_") %>% 
+  str_remove(".csv")
+
+```
+
+
+```{r}
+# assign names to dfs
+for (i in 1:length(index_list)) {
+  assign(index_list[i], nested_tbl[[i]])
+} 
+
+df_olim <- imo_df %>% select(c(1,2,13)) # df main
+df_olim %>% head()
+```
+
+
+### Test Merge
+
+Conduct the following before full-on merge
+
+  + Rename all dfs -- "Year", "Code", "xxxindex" (?manual)
+  + Lambda with ~.fun()
+  
+```{r}
+df_olim <- df_olim %>% rename(Year = year, Code = country)
+
+test_left <- left_join(df_olim, df_egg_consumption, by = c("Year", "Code")) %>% 
+  select(1,2,3,4,5)
+```
+
+To do: 
+
+  + Find missing country codes
+  + Remove if necessary
+  
+```{r}
+test_codes <- test_left %>% 
+  filter(is.na(Entity)) %>% 
+  pull(Code) %>% 
+  unique() %>% list("CodesWithIssues" = .) # country codes without identifiers, 2491 such codes
+```
+
+To do:
+  
+  + Find out if the codes are same for all index data sets
+  + Check ![URL](https://laendercode.net/en/3-letter-list.html)
+
+
