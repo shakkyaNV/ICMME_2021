@@ -1,4 +1,4 @@
-Entity,Code,Year,"Eggs - Food supply quantity (kg/capita/yr) (FAO, 2020)"
+Entity,Code,Year,egg_index
 Afghanistan,AFG,1961,0.94
 Afghanistan,AFG,1962,1.01
 Afghanistan,AFG,1963,1.04

@@ -1,4 +1,4 @@
-Entity,Code,Year,Food Balance Sheets: Grand Total - Protein supply quantity (g/capita/day) (FAO (2017))
+Entity,Code,Year,protein_index
 Afghanistan,AFG,1961,84.91
 Afghanistan,AFG,1962,82.98
 Afghanistan,AFG,1963,77.12

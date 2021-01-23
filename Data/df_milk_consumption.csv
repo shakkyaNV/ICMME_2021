@@ -1,4 +1,4 @@
-Entity,Code,Year,"Milk - Excluding Butter - Food supply quantity (kg/capita/yr) (FAO, 2020)"
+Entity,Code,Year,milk_index
 Afghanistan,AFG,1961,59.3
 Afghanistan,AFG,1962,58.57
 Afghanistan,AFG,1963,63.87

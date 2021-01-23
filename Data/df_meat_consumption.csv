@@ -1,4 +1,4 @@
-Entity,Code,Year,Food Balance Sheets: Meat - Food supply quantity (kg/capita/yr) (FAO (2017))
+Entity,Code,Year,meat_index
 Afghanistan,AFG,1961,14.45
 Afghanistan,AFG,1962,14.46
 Afghanistan,AFG,1963,14.88
