@@ -176,24 +176,45 @@ for (i in codes) {
 
 ```{r}
 #replace all NAs with mean value
+library(imputeTS)
 codes<-df_test3 %>% pull(Code) %>% unique() 
-means<-df_test3 %>% filter(Code==codes[i])%>% select(-(1:3)) %>% 
-            colMeans(na.rm = T) %>% tibble()
-df_test4 <- df_test3
+test1_na<-df_test3
+df_total<-list()
 
-
-for (i in codes) {
-  for (j in 4:11) {
-    df_test3 %>% filter(Code==codes[i]) %>% 
-            select(j) %>% replace_na(means[j-3,1]) 
-      
-  }
+for (i in 1:105) {
   
+  test2_na<-test1_na %>% filter(Code==codes[i])
+  test <- na_mean(test2_na)
+  df_total[[i]]<-test
 }
 
-    
+data_all<-do.call(rbind,df_total)
+View(data_all)    
 
 ```
+
+```{r}
+#remove codes in meat index with all NAs
+remove_codes_meat_index<-data_all[which(is.na(data_all$meat_index)),] %>% pull(Code) %>% unique()
+df_test5<-data_all %>% filter(!Code %in% remove_codes_allna)
+
+#remove codes in life_exp_primary_edu index with all NAs
+remove_codes_life_index<-df_test5[which(is.na(df_test5$life_exp_primary_edu_index)),] %>% pull(Code) %>% unique()
+df_test6<-df_test5 %>% filter(!Code %in% remove_codes_life_index)
+
+#check NA count in final dataset
+sum(is.na(df_test6))
+sapply(df_test6, function(x) sum(is.na (x)))
+View(df_test6)
+df_cleaned<-df_test6
+
+```
+
+
+```{r}
+
+```
+
 
 
 
