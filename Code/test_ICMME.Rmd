@@ -16,6 +16,7 @@ knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
 
 ```{r libs}
 library(tidyverse)
+# library(imputeTS)
 ```
 
 ### Import all files
@@ -127,8 +128,11 @@ df_loser %>% select(-award) %>% na.omit() %>% dim()
 
 ```{r}
 #replace NAs with mean value
-df<-df_loser %>% select(c(1,2,8)) %>% filter(Code=="FIN")
-df %>% mutate_all(~replace(., is.na(.), mean(df$lower_secnd_edu_index, na.rm=T))) %>% View()
+# df <- df_loser %>% select(c(1,2,8)) %>% filter(Code=="FIN")
+# 
+# df %>% 
+#   mutate_all(~replace(., is.na(.),
+#                       mean(df$lower_secnd_edu_index, na.rm=T))) 
 
 ```
 
@@ -136,8 +140,10 @@ df %>% mutate_all(~replace(., is.na(.), mean(df$lower_secnd_edu_index, na.rm=T))
 ```{r}
 #extract variables with NAs
 remove_codes<-df_loser %>% 
-    # select_at(Code, vars(contains("index"))) %>% head()
-    filter_at(vars(contains("index")), all_vars(rlang::are_na(.))) %>% pull(Code) %>% unique() %>% list("remove"=.) 
+    filter_at(vars(contains("index")), 
+              all_vars(rlang::are_na(.))) %>% 
+  pull(Code) %>% unique() %>% 
+  list("remove"=.) 
    
 ```
 
@@ -145,7 +151,7 @@ remove_codes<-df_loser %>%
 ```{r}
 
 #remove variables with NAs
-df_test2<-df_loser %>% 
+df_test2 <- df_loser %>% 
   filter(!Code %in% remove_codes$remove)
 
 ```
@@ -154,49 +160,46 @@ df_test2<-df_loser %>%
 ```{r}
 #count NAs by variables
 sapply(df_test2, function(x) sum(is.na (x))) %>% sort(decreasing = T) 
-df_test3<-df_test2 %>% select(-c(6,8,14))
+
+df_test3 <- df_test2 %>% select(-c(6,8,14))
 ```
 
 
 ```{r}
 #testing
-var_names<-df_test3 %>% select(-(1:3)) %>% names()
-  
-for (i in codes) {
-    temp<-df_test3 %>% filter(Code==codes[i])%>% select(-(1:3)) %>% 
-            colMeans(na.rm = T) %>% tibble()
-    sapply(var_names, replace_na(10))
-         # mutate_all(~replace(., is.na(.), mean(..., na.rm=T))) 
-}
-
-
-
+# var_names <- df_test3 %>% select(-(1:3)) %>% names()
+#   
+# for (i in codes) {
+#     temp<-df_test3 %>% filter(Code==codes[i])%>% select(-(1:3)) %>% 
+#             colMeans(na.rm = T) %>% tibble()
+#     sapply(var_names, replace_na(10))
+#          # mutate_all(~replace(., is.na(.), mean(..., na.rm=T))) 
+# }
 ```
 
 
-```{r}
+```{r, message=F, warning=F}
 #replace all NAs with mean value
-library(imputeTS)
-codes<-df_test3 %>% pull(Code) %>% unique() 
-test1_na<-df_test3
-df_total<-list()
+codes <- df_test3 %>% pull(Code) %>% unique() 
+test1_na <- df_test3
+df_total <- list()
 
 for (i in 1:105) {
   
-  test2_na<-test1_na %>% filter(Code==codes[i])
-  test <- na_mean(test2_na)
-  df_total[[i]]<-test
+  test2_na <- test1_na %>% filter(Code==codes[i])
+  test <- imputeTS::na_mean(test2_na)
+  df_total[[i]] <- test
 }
 
-data_all<-do.call(rbind,df_total)
-View(data_all)    
+data_all <- do.call(rbind,df_total)
+# View(data_all)    
 
 ```
 
 ```{r}
 #remove codes in meat index with all NAs
 remove_codes_meat_index<-data_all[which(is.na(data_all$meat_index)),] %>% pull(Code) %>% unique()
-df_test5<-data_all %>% filter(!Code %in% remove_codes_allna)
+df_test5 <- data_all %>% filter(!Code %in% remove_codes_meat_index)
 
 #remove codes in life_exp_primary_edu index with all NAs
 remove_codes_life_index<-df_test5[which(is.na(df_test5$life_exp_primary_edu_index)),] %>% pull(Code) %>% unique()
@@ -205,16 +208,10 @@ df_test6<-df_test5 %>% filter(!Code %in% remove_codes_life_index)
 #check NA count in final dataset
 sum(is.na(df_test6))
 sapply(df_test6, function(x) sum(is.na (x)))
-View(df_test6)
+# View(df_test6)
 df_cleaned<-df_test6
 
 ```
-
-
-```{r}
-
-```
-
 
 
 
