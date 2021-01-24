@@ -86,14 +86,32 @@ doParallel::registerDoParallel()
 
 
 ```{r}
-Full_8 <- df_8 %>% 
-  pivot_longer(!c(IndicatorCode, CountryCode), 
-               names_to = "Year", 
-               values_to = "Value") 
+# Change the data set attributes in rows to columns and vise versa
 
-Full_4 <- df_4 %>% 
+main_8 <- df_8 %>% 
   pivot_longer(!c(IndicatorCode, CountryCode), 
                names_to = "Year", 
-               values_to = "Value")
+               values_to = "Value") %>% 
+    pivot_wider(id_cols = c(CountryCode,Year), 
+              names_from = IndicatorCode, 
+              values_from = Value)
+
+main_4 <- df_4 %>% 
+  pivot_longer(!c(IndicatorCode, CountryCode), 
+               names_to = "Year", 
+               values_to = "Value") %>% 
+    pivot_wider(id_cols = c(CountryCode,Year), 
+              names_from = IndicatorCode, 
+              values_from = Value) 
 ```
+
+
+```{r}
+main_8  %>% head(40) 
+```
+
+
+
+
+
 
