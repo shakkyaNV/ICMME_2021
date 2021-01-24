@@ -94,7 +94,7 @@ main_8 <- df_8 %>%
                values_to = "Value") %>% 
     pivot_wider(id_cols = c(CountryCode,Year), 
               names_from = IndicatorCode, 
-              values_from = Value)
+              values_from = Value) %>% rename(Code = CountryCode)
 
 main_4 <- df_4 %>% 
   pivot_longer(!c(IndicatorCode, CountryCode), 
@@ -102,16 +102,133 @@ main_4 <- df_4 %>%
                values_to = "Value") %>% 
     pivot_wider(id_cols = c(CountryCode,Year), 
               names_from = IndicatorCode, 
-              values_from = Value) 
+              values_from = Value) %>% 
+  select(-c(3,4)) %>% rename(Code = CountryCode)
+```
+
+
+
+```{r}
+df_raw1 <- main_8 %>%  
+  left_join( y  = main_4, by = c('Code', 'Year'), copy = T)
 ```
 
 
 ```{r}
-main_8  %>% head(40) 
+df_raw1$Year<-as.numeric(df_raw1$Year)
+df_raw2<-df_loser %>% 
+  left_join( y  = df_raw1, by = c('Code', 'Year'), copy = T)
+```
+
+```{r}
+
+remove_codes_raw<-df_raw2 %>% 
+    filter_at(vars(!contains(c("award", "Code", "Year"))), all_vars(rlang::are_na(.))) %>% 
+  pull(Code) %>% unique() %>% 
+  list("remove"=.) 
+```
+
+
+```{r}
+#remove variables with NAs
+df_raw3 <- df_raw2 %>% 
+  filter(!Code %in% remove_codes_raw$remove)
+```
+
+
+```{r}
+#count NAs by variables
+temp3 <- sapply(df_raw3, function(x) sum(is.na (x))) %>% sort(decreasing = T) 
+
+temp4 <- data.frame(temp3)
+
+remove_columns<- temp4 %>% filter(temp3> 6000) %>% rownames()
+
+df_raw4 <- df_raw3 %>% select(-remove_columns)
+
+```
+
+
+```{r}
+library(imputeTS)
 ```
 
 
 
+```{r}
+#replace all NAs with mean value
+codes <- df_raw4 %>% pull(Code) %>% unique() 
+test1_na_raw <- df_raw4
+df_total_raw <- list()
 
+for (i in 1:length(codes)) {
+  
+  test2_na_raw <- test1_na_raw %>% filter(Code==codes[i])
+  test_raw <- na_mean(test2_na_raw)
+  df_total_raw[[i]] <- test_raw
+}
+
+data_all_raw <- do.call(rbind,df_total_raw)
+View(data_all_raw)
+```
+
+
+```{r}
+sapply(df_raw19, function(x) sum(is.na (x))) %>% sort(decreasing = T) 
+
+remove_codes_raw1<-data_all_raw[which(is.na(data_all_raw$SH.STA.ODFC.RU.ZS)),] %>% pull(Code) %>% unique()
+df_raw5 <- data_all_raw %>% filter(!Code %in% remove_codes_raw1)
+
+remove_codes_raw2<-df_raw5[which(is.na(df_raw5$SH.IMM.HEPB)),] %>% pull(Code) %>% unique()
+df_raw6 <- df_raw5 %>% filter(!Code %in% remove_codes_raw2)
+
+remove_codes_raw3<-df_raw6[which(is.na(df_raw6$SE.PRM.CMPT.MA.ZS )),] %>% pull(Code) %>% unique()
+df_raw7 <- df_raw6 %>% filter(!Code %in% remove_codes_raw3)
+
+remove_codes_raw4<-df_raw7[which(is.na(df_raw7$SE.SEC.ENRL.VO.FE.ZS  )),] %>% pull(Code) %>% unique()
+df_raw8 <- df_raw7 %>% filter(!Code %in% remove_codes_raw4)
+
+remove_codes_raw5<-df_raw8[which(is.na(df_raw8$SH.STA.BRTC.ZS  )),] %>% pull(Code) %>% unique()
+df_raw9 <- df_raw8 %>% filter(!Code %in% remove_codes_raw5)
+
+remove_codes_raw6<-df_raw9[which(is.na(df_raw9$ SN.ITK.DEFC.ZS   )),] %>% pull(Code) %>% unique()
+df_raw10 <- df_raw9 %>% filter(!Code %in% remove_codes_raw6)
+
+remove_codes_raw7<-df_raw10[which(is.na(df_raw10$`Pupil-teacher ratio in pre-primary education (headcount basis)`   )),] %>% pull(Code) %>% unique()
+df_raw11 <- df_raw10 %>% filter(!Code %in% remove_codes_raw7)
+
+remove_codes_raw8<-df_raw11[which(is.na(df_raw11$SE.SEC.CMPT.LO.ZS  )),] %>% pull(Code) %>% unique()
+df_raw12 <- df_raw11 %>% filter(!Code %in% remove_codes_raw8)
+
+remove_codes_raw9<-df_raw12[which(is.na(df_raw12$SE.XPD.TOTL.GB.ZS  )),] %>% pull(Code) %>% unique()
+df_raw13 <- df_raw12 %>% filter(!Code %in% remove_codes_raw9)
+
+remove_codes_raw10<-df_raw13[which(is.na(df_raw13$ SE.PRM.PRSL.ZS   )),] %>% pull(Code) %>% unique()
+df_raw14 <- df_raw13 %>% filter(!Code %in% remove_codes_raw10)
+
+remove_codes_raw11<-df_raw14[which(is.na(df_raw14$ SE.SEC.ENRL.TC.ZS    )),] %>% pull(Code) %>% unique()
+df_raw15 <- df_raw14 %>% filter(!Code %in% remove_codes_raw11)
+
+remove_codes_raw12<-df_raw15[which(is.na(df_raw15$ SM.POP.REFG.OR    )),] %>% pull(Code) %>% unique()
+df_raw16 <- df_raw15 %>% filter(!Code %in% remove_codes_raw12)
+
+remove_codes_raw13<-df_raw14[which(is.na(df_raw14$  SE.TER.ENRL.TC.ZS     )),] %>% pull(Code) %>% unique()
+df_raw17 <- df_raw16 %>% filter(!Code %in% remove_codes_raw13)
+
+remove_codes_raw14<-df_raw15[which(is.na(df_raw15$  SH.MED.BEDS.ZS      )),] %>% pull(Code) %>% unique()
+df_raw18 <- df_raw17 %>% filter(!Code %in% remove_codes_raw14)
+
+remove_codes_raw15<-df_raw16[which(is.na(df_raw16$  SE.COM.DURS       )),] %>% pull(Code) %>% unique()
+df_raw19 <- df_raw18 %>% filter(!Code %in% remove_codes_raw15)
+df_final<-df_raw19
+#View(df_final)
+
+
+```
+
+
+```{r}
+# write.csv(df_final, "../Data/heavy/merge_final.csv")
+```
 
 

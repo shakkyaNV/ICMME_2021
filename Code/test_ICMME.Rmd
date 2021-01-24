@@ -112,6 +112,7 @@ df_loser <- full_merge(y = df_egg_consumption) %>%
 
 ```
 
+<!-- 
 ```{r}
 countryCodesWithIssues <- df_loser %>% 
     # select_at(Code, vars(contains("index"))) %>% head()
@@ -215,3 +216,4 @@ df_cleaned<-df_test6
 
 
 
+--> 
