@@ -174,7 +174,7 @@ View(data_all_raw)
 
 
 ```{r}
-sapply(df_raw19, function(x) sum(is.na (x))) %>% sort(decreasing = T) 
+#sapply(df_raw19, function(x) sum(is.na (x))) %>% sort(decreasing = T) 
 
 remove_codes_raw1<-data_all_raw[which(is.na(data_all_raw$SH.STA.ODFC.RU.ZS)),] %>% pull(Code) %>% unique()
 df_raw5 <- data_all_raw %>% filter(!Code %in% remove_codes_raw1)
