@@ -17,6 +17,7 @@ library(tidymodels)
 library(MASS)
 library(caret)
 library(ordinal)
+library(glmnet)
 ```
 
 
@@ -28,7 +29,6 @@ df<-df[,-1]
 df %>% head()
 ```
 ```{r}
-
 #select <- dplyr::select
 df %<>% mutate(
   award = replace_na(award, "Not awarded"),
@@ -41,19 +41,45 @@ df[,1]<-ordered(recode(df$award,"Not awarded"=0, "Honourable mention"=1,"Bronze 
 preproc<-preProcess(df[,-1],method= c("center","scale"))
 df[,-1]<-predict(preproc, df[,-1])
 df %>% head()
-  
+```
+
+
+```{r}
+df_0<- df %>% filter(award %in% 0)
+df_1<- df %>% filter(award %in% 1)
+df_2<- df %>% filter(award %in% 2)
+df_3<- df %>% filter(award %in% 3)
+df_4<- df %>% filter(award %in% 4)
+
+set.seed(8080)
+spilt_0<- initial_split(df_0)
+spilt_1<- initial_split(df_1)
+spilt_2<- initial_split(df_2)
+spilt_3<- initial_split(df_3)
+spilt_4<- initial_split(df_4)
+
+split_train<- rbind.data.frame(
+  training(spilt_0), training(spilt_1), training(spilt_2),
+  training(spilt_3), training(spilt_4)
+)
+
+split_test<- rbind.data.frame(
+  testing(spilt_0), testing(spilt_1), testing(spilt_2),
+  testing(spilt_3), testing(spilt_4)
+)
+
+#write.csv(split_train, "../Data/heavy/split_train.csv")
+#write.csv(split_test, "../Data/heavy/split_test.csv")
+
+
 ```
 
 
 
 ```{r}
-set.seed(808)
+split_train<- read.csv("../Data/heavy/split_train.csv") %>% select(-1)
+split_test<- read.csv("../Data/heavy/split_test.csv") %>% select(-1)
 
-split_initial <- initial_split(df, 
-                               prop = 0.75)
-
-split_train <- training(split_initial)
-split_test <- testing(split_initial)
 ```
 
 
@@ -64,6 +90,8 @@ split_test %>% dim()
 ```
 
 ```{r}
+split_train$award<- ordered(as.factor(split_train$award))
+split_test$award<- ordered(as.factor(split_test$award))
 split_train[, 1:4] %>% str()
 ```
 
@@ -80,16 +108,45 @@ juice(df_recipe) %>% head()
 
 ```{r}
 #OLS model fitting
-model_ols<-polr(award~.,data=split_train[,c(1,25:35)], method = "logistic")
+model_ols<-polr(award~.,data=split_train[, 1:12], method = "logistic")
 #summary(model_ols)
-predicted<-predict(model_ols, split_test)
-table(split_test$award,predicted)
+predictions_ols<-predict(model_ols, split_test)
+table(split_test$award,predictions_ols)
+
 ```
 
 
 ```{r}
-model_ols_2<-clm(award~.,data=split_train, link = "logit")
+model_ols_2<- ordinal:: clm(award~.,data=split_train, link = "logit")
 summary(model_ols_2)
+```
+
+
+```{r}
+#data preparation for penalized regression
+x<- model.matrix(award~.,split_train)[,-1]
+x.test<- model.matrix(award~. , split_test)[,-1]
+y<- as.numeric(split_train$award)
+y.test<- as.numeric(split_test$award)
+
+#ridge regression modeling
+set.seed(7070)
+cv<- cv.glmnet(x, y , alpha = 0)
+#best lambda value
+cv$lambda.min
+model_ridge<- glmnet(x, y , alpha =0, 
+                     lambda = cv$lambda.min)
+coef(model_ridge)
+predictions_ridge<- model_ridge %>% predict(x.test) %>% as.vector()
+#model performance matrix
+data.frame( 
+  RMSE= RMSE(predictions_ridge, y.test),
+  Rsquare= R2(predictions_ridge, y.test)
+)
+```
+
+
+```{r}
 
 ```
 
