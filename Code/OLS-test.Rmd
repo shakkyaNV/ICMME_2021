@@ -95,7 +95,7 @@ split_test$award<- ordered(as.factor(split_test$award))
 split_train[, 1:4] %>% str()
 ```
 
-
+<!--
 ```{r}
 df_recipe <- split_train[,] %>% 
   recipe(award ~ .) %>% # predicting award
@@ -104,21 +104,28 @@ df_recipe <- split_train[,] %>%
 
 juice(df_recipe) %>% head()
 ```
-
+-->
 
 ```{r}
 #OLS model fitting
-model_ols<-polr(award~.,data=split_train[, 1:12], method = "logistic")
+model_ols<-polr(award~.,data=split_train, method = "logistic",
+                Hess = TRUE)
 #summary(model_ols)
-predictions_ols<-predict(model_ols, split_test)
+predictions_ols<-predict(model_ols, split_test, type = "class")
 table(split_test$award,predictions_ols)
 
 ```
 
 
 ```{r}
+#cumulative link model for ordinal regression
 model_ols_2<- ordinal:: clm(award~.,data=split_train, link = "logit")
 summary(model_ols_2)
+```
+
+
+```{r}
+
 ```
 
 
