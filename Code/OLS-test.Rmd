@@ -16,18 +16,20 @@ library(tidyverse)
 library(tidymodels)
 library(MASS)
 library(caret)
+library(ordinal)
 ```
 
 
 ### Load data
 ```{r}
 
-df <- read_csv("../Data/heavy/merge_final.csv") %>% select(-1)
+df <- read_csv("../Data/heavy/merge_final.csv") 
+df<-df[,-1]
 df %>% head()
 ```
 ```{r}
 
-
+#select <- dplyr::select
 df %<>% mutate(
   award = replace_na(award, "Not awarded"),
   award = as.factor(award)
@@ -82,6 +84,13 @@ model_ols<-polr(award~.,data=split_train[,c(1,25:35)], method = "logistic")
 #summary(model_ols)
 predicted<-predict(model_ols, split_test)
 table(split_test$award,predicted)
+```
+
+
+```{r}
+model_ols_2<-clm(award~.,data=split_train, link = "logit")
+summary(model_ols_2)
+
 ```
 
 
