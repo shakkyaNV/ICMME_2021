@@ -100,7 +100,6 @@ Try
 
 ```{r}
 # work-flow
-
 wf <- workflow() %>% 
   add_recipe(olim_recipe)
 
@@ -117,20 +116,28 @@ ridge_spec <- linear_reg(penalty = 0.1, mixture = 0) %>%
 #### Model fit and tidy
 
 ```{r}
+# fit model
 lasso_fit <- wf %>% add_model(lasso_spec) %>% 
   fit(data = split_train)
 
+# pull metrics using lasso_fit %>% pull_workflow_mold() 
 lasso_fit %>% pull_workflow_fit() %>% 
   tidy()
 
-one <- glmnet(x = maybe_matrix(split_train[,-1]), y = split_train$award, alpha = 0)
 ```
 
+Things to do
+
+  + tune properly --> penalty(), lambda()
+  + tune ElasticNet -- > mixture()
+  + grid fold cv
+  + check metrics
+  
 
 ```{r}
 
 set.seed(1234)
-lasso_boot <- bootstraps(split_train, strata = award)
+# lasso_boot <- bootstraps(split_train, strata = award)
 
 tune_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
   set_engine("glmnet") # tune lambda, 
@@ -143,7 +150,7 @@ doParallel::registerDoParallel()
 set.seed(2020)
 lasso_grid <- tune_grid(
   wf %>% add_model(tune_spec),
-  resamples = lasso_boot,
+  # resamples = lasso_boot,
   grid = lambda_grid)
 
 ```
