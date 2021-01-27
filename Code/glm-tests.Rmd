@@ -1,0 +1,153 @@
+---
+title: "GLM - tests"
+author: "eNVy"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NULL)
+# knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
+```
+
+```{r libs, warning=F, message=F}
+library(tidyverse)
+# library(magrittr)
+library(tidymodels)
+library(glmnet)
+```
+
+
+### Load data
+```{r}
+# test read and raw read
+raw_df<- read_csv("../Data/heavy/merge_final.csv")
+# raw_df %>% glimpse()
+```
+
+```{r}
+# cleaning
+raw_df %>% head()
+
+award_levels <- c("Gold medal",  # factor levels
+                  "Silver medal", 
+                  "Bronze medal", 
+                  "Honourable mention",
+                  "Not awarded")
+
+initial_df <- raw_df %>%
+  select(-c(1:3)) %>% 
+  mutate(
+    award = replace_na(award, "Not awarded"), 
+    award = as.factor(award))
+
+initial_df %<>% mutate( 
+    award = fct_relevel(initial_df$award,  # order re-ordered 
+            award_levels) %>% 
+  fct_rev() %>% # reversed to say NA < HM < B < S < Gold
+  factor(ordered = T) # make ordinal
+  ) 
+
+```
+
+```{r}
+# training and testing split
+# see proportions
+set.seed(808)
+
+split_initial <- initial_split(initial_df, 
+                               prop = 0.75)
+
+split_train <- training(split_initial)
+split_test <- testing(split_initial)
+
+```
+
+### Create recipe
+
+Things to do in the recipe
+
+  + Normalize
+  + Nominal encoding ```award```
+  + remove redundant features
+
+Things to do before recipe
+
+  + Loose some rows -- > remove redundant features
+  + possible PCA?
+  
+```{r}
+# recipe
+
+olim_recipe <- recipe(award ~., data = split_train) %>% 
+  step_normalize(all_numeric(), -all_outcomes()) %>% 
+  step_ordinalscore("award") %>% 
+  step_nzv(all_numeric()) %>% 
+  prep()
+  
+olim_recipe %>% juice() %>% head()
+```
+### Modelling 
+
+Try 
+
+  + Ordinal Logistic Regression
+  + Lasso Regression
+  + Ridge Regression
+  + ElasticNet
+  
+#### Model workflow and Specifications
+
+```{r}
+# work-flow
+
+wf <- workflow() %>% 
+  add_recipe(olim_recipe)
+
+# model specs
+lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("regression")
+
+ridge_spec <- linear_reg(penalty = 0.1, mixture = 0) %>% 
+  set_engine("glmnet")
+
+```
+
+#### Model fit and tidy
+
+```{r}
+lasso_fit <- wf %>% add_model(lasso_spec) %>% 
+  fit(data = split_train)
+
+lasso_fit %>% pull_workflow_fit() %>% 
+  tidy()
+
+one <- glmnet(x = maybe_matrix(split_train[,-1]), y = split_train$award, alpha = 0)
+```
+
+
+```{r}
+
+set.seed(1234)
+lasso_boot <- bootstraps(split_train, strata = award)
+
+tune_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet") # tune lambda, 
+# elastic --> tune mixture()
+
+lambda_grid <- grid_regular(penalty(), levels = 50)
+
+doParallel::registerDoParallel()
+
+set.seed(2020)
+lasso_grid <- tune_grid(
+  wf %>% add_model(tune_spec),
+  resamples = lasso_boot,
+  grid = lambda_grid)
+
+```
+
+
+
+
