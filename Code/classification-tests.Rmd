@@ -1,0 +1,37 @@
+---
+title: "Classification"
+author: "HH"
+date: "1/28/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r, warning=FALSE,message=FALSE}
+library(tidyverse)
+library(caret)
+```
+
+```{r}
+split_train<- read.csv("../Data/heavy/split_train.csv") %>%
+  select(-1)
+split_test<- read.csv("../Data/heavy/split_test.csv") %>%
+  select(-1)
+split_train$award<- ordered(as.factor(split_train$award))
+split_test$award<- ordered(as.factor(split_test$award))
+```
+
+## Support Vector Machine (SVM)
+```{r}
+trctrl <- trainControl(method = "cv", number = 10)
+model_svm <- train(award ~., data = split_train, method = "svmLinear",
+trControl=trctrl, tuneLength = 10)
+model_svm
+predictions_svm<- predict(model_svm, split_test)
+confusionMatrix(table(predictions_svm, split_test$award))
+```
+
+
