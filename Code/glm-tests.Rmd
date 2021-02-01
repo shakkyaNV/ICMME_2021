@@ -12,7 +12,7 @@ knitr::opts_chunk$set(echo = TRUE, comment = NULL)
 
 ```{r libs, warning=F, message=F}
 library(tidyverse)
-# library(magrittr)
+library(magrittr)
 library(tidymodels)
 library(glmnet)
 ```
@@ -24,6 +24,7 @@ library(glmnet)
 raw_df<- read_csv("../Data/heavy/merge_final.csv")
 # raw_df %>% glimpse()
 ```
+
 
 ```{r}
 # cleaning
@@ -49,6 +50,7 @@ initial_df %<>% mutate(
   ) 
 
 ```
+
 
 ```{r}
 # training and testing split
@@ -79,15 +81,25 @@ Things to do before recipe
 ```{r}
 # recipe
 
-olim_recipe <- recipe(award ~., data = split_train) %>% 
+olim_recipe <- recipe(~., data = split_train) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>% 
-  step_ordinalscore("award") %>% 
-  step_nzv(all_numeric()) %>% 
-  prep()
+  # step_ordinalscore(all_nominal()) %>% 
+  update_role(award, new_role = "outcome")
+  # step_dummy(all_outcomes(), -all_numeric()) %>%  
+  # step_nzv(all_predictors())
   
-olim_recipe %>% juice() %>% head()
+olim_recipe <- prep(olim_recipe, training = split_train)
+  
+train_data = bake(olim_recipe, split_train)
+test_data = bake(olim_recipe, split_test)
 ```
-### Modelling 
+
+
+```{r}
+# summary of the model matrix
+olim_recipe %>% summary()
+```
+## Modelling 
 
 Try 
 
@@ -96,7 +108,9 @@ Try
   + Ridge Regression
   + ElasticNet
   
-#### Model workflow and Specifications
+### Model workflow and Specifications
+
+### 1. Lasso Regression 
 
 ```{r}
 # work-flow
@@ -104,21 +118,30 @@ wf <- workflow() %>%
   add_recipe(olim_recipe)
 
 # model specs
-lasso_spec <- linear_reg(penalty = 0.1, mixture = 1) %>% 
+lasso_spec <- multinom_reg(penalty = 0.1, mixture = 1) %>% 
   set_engine("glmnet") %>% 
-  set_mode("regression")
+  set_mode("classification") %>% 
+  set_args(family = "multinomial") # %>% set_args(type = "response")
 
+# model specification in detail
+lasso_spec %>% translate()
+```
+
+<!-- 
+```{r}
+# 
 ridge_spec <- linear_reg(penalty = 0.1, mixture = 0) %>% 
   set_engine("glmnet")
 
 ```
+--> 
 
-#### Model fit and tidy
+### Model fit and tidy
 
 ```{r}
-# fit model
+# fit model & train
 lasso_fit <- wf %>% add_model(lasso_spec) %>% 
-  fit(data = split_train)
+  fit(data = train_data)
 
 # pull metrics using lasso_fit %>% pull_workflow_mold() 
 lasso_fit %>% pull_workflow_fit() %>% 
@@ -126,34 +149,333 @@ lasso_fit %>% pull_workflow_fit() %>%
 
 ```
 
+
+
+```{r}
+# pull metrics # classified class in train
+lasso_fit_object <- (lasso_fit %>% pull_workflow_mold())
+
+# confusion matrix for train
+table(lasso_fit_object$outcomes$award, split_train$award)
+# huh?
+```
+### Parameter tune and finalize workflow
+
+```{r}
+set.seed(2020)
+
+olim_resample_boot <- bootstraps(train_data, breaks = 5)
+
+tune_spec <- multinom_reg(penalty = tune(), 
+                        mixture = 1) %>% 
+    set_engine("glmnet") %>% 
+  set_mode("classification") %>% 
+  set_args(family = "multinomial")
+
+penalty_grid <- grid_regular(penalty(), levels = 20)
+```
+
+
+
+```{r}
+doParallel::registerDoParallel()
+
+set.seed(123)
+
+lasso_grid <- tune_grid(wf %>% add_model(tune_spec), 
+                        resamples = olim_resample_boot, 
+                        grid = penalty_grid)
+
+```
+
+
+
+```{r}
+# see the grid and collect best gird option
+lasso_grid %>% collect_metrics()
+
+low_acc <- lasso_grid %>% select_best(metric = "accuracy", penalty)
+
+final_fit_lasso<- finalize_workflow(wf %>% add_model(tune_spec), 
+                             low_acc)
+```
+
+
+```{r}
+# visualize the grid (not needed though)
+# (silgelib::theme_roboto())
+lasso_grid  %>% 
+  collect_metrics() %>% 
+  ggplot(mapping = aes(penalty, mean, color = .metric)) + 
+  geom_errorbar(aes(ymin = mean - std_err,
+                    ymax = mean + std_err), 
+                alpha = 0.6) + 
+  geom_line() + 
+  facet_wrap(~.metric, scales = "free", nrow = 2) + 
+  scale_x_log10() + theme_minimal() + theme(legend.position =  "none")
+```
+
 Things to do
 
   + tune properly --> penalty(), lambda()
   + tune ElasticNet -- > mixture()
   + grid fold cv
-  + check metrics
+  + check metrics in test
   
+```{r}
+library(vip)
+
+final_fit_lasso %>% fit(split_train) %>% 
+  pull_workflow_fit() %>% 
+  vi(lambda = low_rsq$penalty) %>% 
+  mutate(
+    Importance  = abs(Importance), 
+    Var = fct_reorder(Variable, Importance)
+  ) %>% filter(Importance > 0.4) %>% 
+  ggplot(mapping = aes(x = Importance, y = Var, fill = Sign)) + 
+  geom_col() + 
+  scale_x_continuous() + 
+  theme(
+    axis.text.x = element_text(angle = 90, 
+                               hjust = 1)
+    )
+```
+
+## Final test fit and check metrics
+
+```{r}
+pred <- last_fit(final_fit_lasso, split_initial) 
+
+pred %>% collect_metrics()
+```
+
+********************************************
+
+### 2. Ridge Regression
+
+```{r}
+# Set the specs and pipe to wf()
+
+# ridge model specs
+
+ridge_initial_spec <- multinom_reg(penalty = 0.1, 
+                                   mixture = 0) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification") %>% 
+  set_args(family = "multinomial") 
+
+ridge_initial_spec %>% translate()
+```
+
+```{r}
+# %>% through workflow
+
+ridge_fit <- wf %>% add_model(ridge_initial_spec) %>% 
+  fit(data = train_data) 
+
+# pull mold if needed
+# ridge_fit %>% pull_workflow_mold()
+
+ridge_fit %>% pull_workflow_fit() %>% 
+  tidy()
+```
+
+
+
+```{r}
+# Fine tune the parameters # penalty
+
+set.seed(2020)
+
+olim_resample_boot <- bootstraps(train_data, breaks = 4)
+
+tune_ridge_spec <- multinom_reg(penalty = tune(), 
+                                mixture = 0) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification") %>% 
+  set_args(family = "multinomial")
+
+penalty_grid_ridge <- grid_regular(penalty(), levels = 20 )
+```
+
+
+```{r}
+doParallel::registerDoParallel()
+
+set.seed(123)
+
+ridge_grid <- tune_grid(
+  wf %>% 
+    add_model(tune_ridge_spec), 
+  resamples = olim_resample_boot,
+  grid = penalty_grid_ridge
+  )
+
+# grid metrics
+ridge_grid %>% collect_metrics()
+```
+
+
+```{r}
+# select model and finalize wf()
+
+low_roc_ridge <- ridge_grid %>% 
+  select_best(metric = "accuracy", penalty) 
+
+final_fit_ridge <- finalize_workflow(wf %>% add_model(tune_ridge_spec), 
+                                     low_roc_ridge)
+```
+
 
 ```{r}
 
-set.seed(1234)
-# lasso_boot <- bootstraps(split_train, strata = award)
+# final model
+pred_ridge <- last_fit(final_fit_ridge, split_initial)
 
-tune_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
-  set_engine("glmnet") # tune lambda, 
-# elastic --> tune mixture()
+pred_ridge %>% collect_metrics()
+```
 
-lambda_grid <- grid_regular(penalty(), levels = 50)
+********************************************
 
-doParallel::registerDoParallel()
+### 3. ElasticNet
+
+```{r}
+# Set the specs and pipe to wf()
+
+# eNet model specs
+
+enet_spec <- multinom_reg(penalty = 0.1, 
+                                   mixture = 0.4) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification") %>% 
+  set_args(family = "multinomial") 
+
+enet_spec %>% translate()
+```
+
+```{r}
+# %>% through workflow
+
+enet_fit <- wf %>% add_model(enet_spec) %>% 
+  fit(data = train_data) 
+
+# pull mold if needed
+# enet_fit %>% pull_workflow_mold()
+
+enet_fit %>% pull_workflow_fit() %>% 
+  tidy()
+```
+
+
+
+```{r}
+# Fine tune the parameters # penalty
 
 set.seed(2020)
-lasso_grid <- tune_grid(
-  wf %>% add_model(tune_spec),
-  # resamples = lasso_boot,
-  grid = lambda_grid)
 
+olim_resample_boot <- bootstraps(train_data, breaks = 2)
+
+tune_enet_spec <- multinom_reg(penalty = tune(), 
+                                mixture = tune()) %>% 
+  set_engine("glmnet") %>% 
+  set_mode("classification") %>% 
+  set_args(family = "multinomial")
+
+penalty_enet_grid <- grid_regular(penalty(), 
+                                  mixture(), 
+                                  levels = 3 )
 ```
+
+
+```{r}
+doParallel::registerDoParallel()
+
+set.seed(123)
+
+enet_grid <- tune_grid(
+  wf %>% 
+    add_model(tune_enet_spec), 
+  resamples = olim_resample_boot,
+  grid = penalty_enet_grid
+  )
+
+# grid metrics
+enet_grid %>% collect_metrics()
+```
+
+
+```{r}
+# select model and finalize wf()
+
+low_roc_enet <- enet_grid %>% 
+  select_best(metric = "accuracy", penalty) 
+
+final_fit_enet <- finalize_workflow(wf %>% add_model(tune_enet_spec), 
+                                     low_roc_enet)
+```
+
+
+```{r}
+
+# final model
+pred_enet<- last_fit(final_fit_enet, split_initial)
+
+pred_enet %>% collect_metrics()
+```
+
+********************************************
+
+### fix issues :: Superseded
+<!-- 
+```{r}
+fit_glm = glmnet(maybe_matrix(split_train[,-1]), 
+                 as.vector.factor(split_train$award), 
+                 family =  "multinomial")
+
+pred_df <- predict(fit_glm, 
+                   newx = maybe_matrix(split_test[,-1]), 
+                   s= 1.1212, # cv.out$lambda.1se, 
+                   type = "response")
+# plot(fit_glm, xvar = "lambda", label = TRUE)
+```
+
+```{r}
+# predsss <- predict(fit_glm, newx = maybe_matrix(split_test[,-1]), type = "class", s = c(0.05,0.01))
+```
+
+```{r}
+df_non = data.frame(check.names = T)
+
+for (i in 1:dim(pred_df)[1]) {
+  df_non[i,1] <- names(pred_df[i,,][pred_df[i,,] %>% max() == pred_df[i,,]])
+}
+
+# table(df_non$V1, split_test$award)
+```
+
+
+```{r}
+# cv
+# uncomment 
+# cv.out <- cv.glmnet(x= maybe_matrix(split_train[, -1]), 
+#                     y= as.vector(fct_anon(factor(split_train$award))), 
+#                     family = "multinomial", 
+#                     type.measure = "mse")
+```
+
+
+```{r}
+# x_test <- model.matrix(award~., split_test)
+# 
+# lasso_prob_cv <- predict(cv.out, newx = maybe_matrix(split_test[,-1]),  s = cv.out$lambda.1se, 
+#                          type = "response")
+```
+
+```{r}
+# predsss
+# table(predsss[,1], split_test$award)
+```
+--> 
 
 
 
