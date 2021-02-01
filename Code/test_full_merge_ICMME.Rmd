@@ -107,7 +107,6 @@ main_4 <- df_4 %>%
 ```
 
 
-
 ```{r}
 df_raw1 <- main_8 %>%  
   left_join( y  = main_4, by = c('Code', 'Year'), copy = T)
@@ -115,12 +114,17 @@ df_raw1 <- main_8 %>%
 
 
 ```{r}
+# run test_ICMME to get df_loser
+
 df_raw1$Year<-as.numeric(df_raw1$Year)
 df_raw2<-df_loser %>% 
   left_join( y  = df_raw1, by = c('Code', 'Year'), copy = T)
+
+# write_csv(df_raw2, file = "../Data/heavy/merge_initial.csv", col_names = T )
 ```
 
 ```{r}
+# start removing stuff
 
 remove_codes_raw<-df_raw2 %>% 
     filter_at(vars(!contains(c("award", "Code", "Year"))), all_vars(rlang::are_na(.))) %>% 

@@ -1,0 +1,111 @@
+---
+title: "ICMME - Merge_initial_Dataset fix"
+author: "eNVy"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NULL)
+# knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
+```
+
+```{r libs, include = F}
+library(tidyverse)
+```
+
+# Dataset import RAW
+
+```{r import, warning=F, message=F}
+raw_df <- read_csv("../Data/heavy/merge_initial.csv", col_names = T)
+raw_df %>% head()
+```
+
+# Indicator dfs
+```{r import, warning=F, message=F}
+ind_list <- list.files(path = "../Data/heavy/", 
+                                pattern = "*indicator.csv", 
+                                full.names = T)
+indicator_nested_tbl <- map(ind_list, read_csv)
+
+indicator_temp_names <- ind_list %>% 
+  str_remove(pattern = "../Data/heavy/") %>% 
+  str_remove(pattern = ".csv")
+
+for (i in 1:length(indicator_temp_names)) {
+  assign(indicator_temp_names[i], indicator_nested_tbl[[i]])
+}
+```
+
+# Fix dataset
+
+To do within data set
+  
+  + Fix NA
+    + Count NA
+      + By country
+      + By year
+      + By index
+      
+    + Removed before
+      + A --> If all NA for every index for given country_index (All years) (NA Horz) -- Remove countr_index
+      + B --> If all NA for every country_index for given index             (NA Vert) -- Remove index
+      + C --> If all NA for every year for a given country for a given index (NA Vert, 1984 - 2017) -- Remove country
+      
+    + Fix how?
+      + A --> Check the y data set in ```left merge``` for **country_names** conflicts
+      + B --> No solution
+      + C --> Can replace value by other related category mean (eg. SP.POP.5054.MA.5Y NA replaced by SA.POP category in same years/country_index )
+      
+    + Replace NA
+      + prev by mean() 
+      + try linear approx()
+      + Time series ar() approx()
+      
+  + New indices
+    + Add vars by down sampling for consistency
+    + possible new indices
+      + Coffee index
+
+
+# Find which countries have less information (Type A)
+
+```{r}
+raw_df %>% 
+  mutate(
+    rowSumNA = rowSums(is.na(raw_df))
+  ) %>% group_by(Year, Code) %>% select(Year, Code, rowSumNA) %>% 
+  arrange(Code, Year) %>% unique()
+```
+
+
+# Count and proportion of NA by variable (Type B)
+
+```{r}
+# test <- raw_df %>% head(40) %>% select(1:10)
+
+temp2 <- raw_df %>% summarise(
+  across(where(is_double), ~sum(is.na(.x)))
+) %>% t() %>% data.frame()
+
+magrittr::`%<>%`(temp2, rownames_to_column())
+
+temp2 %>% mutate(
+  prop = ./dim(raw_df)[2]
+) %>% arrange(prop)
+
+# check and remove necessary
+```
+
+# Find a possible year range for all indices
+
+```{r}
+raw_df %>% 
+  group_by(Code) %>% 
+  summarise(min = min(Year), 
+            max = max(Year))
+
+# find a possible lower bound that's good (possible future approx()) for most of the countries
+raw_df %>% select(Code) %>% unique() %>% count()
+```
+
