@@ -109,7 +109,8 @@ main_4 <- df_4 %>%
 
 ```{r}
 df_raw1 <- main_8 %>%  
-  left_join( y  = main_4, by = c('Code', 'Year'), copy = T)
+  left_join( y  = main_4, by = c('Code', 'Year'), 
+             copy = T)
 ```
 
 
@@ -130,6 +131,12 @@ remove_codes_raw<-df_raw2 %>%
     filter_at(vars(!contains(c("award", "Code", "Year"))), all_vars(rlang::are_na(.))) %>% 
   pull(Code) %>% unique() %>% 
   list("remove"=.) 
+
+remove_codes_raw
+df_raw2 %>% filter(Code == "USS") %>% 
+  mutate( 
+  rows = rowSums(is.na(df_raw2 %>% filter(Code == "USS")))) %>% select(c("Code", "Year", "rows"))
+
 ```
 
 
@@ -137,6 +144,8 @@ remove_codes_raw<-df_raw2 %>%
 #remove variables with NAs
 df_raw3 <- df_raw2 %>% 
   filter(!Code %in% remove_codes_raw$remove)
+
+dim(df_raw3)
 ```
 
 

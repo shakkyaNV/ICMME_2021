@@ -45,6 +45,8 @@ temp <- raw_df %>% sample_n(5) %>% t() %>% data.frame() %>%
 temp %>% left_join(y = API_8_indicator, 
                    by = 'INDICATOR_CODE')  %>% 
   select(c(1,7)) %>% View()
+
+# to be removed.txt
 ```
 
 
@@ -86,7 +88,7 @@ raw_df %>%
   mutate(
     rowSumNA = rowSums(is.na(raw_df))
   ) %>% group_by(Year, Code) %>% select(Year, Code, rowSumNA) %>% 
-  arrange(Code, Year) %>% unique()
+  arrange(Code, Year) %>% unique() %>% View()
 ```
 
 
@@ -96,16 +98,34 @@ raw_df %>%
 # test <- raw_df %>% head(40) %>% select(1:10)
 
 temp2 <- raw_df %>% summarise(
-  across(where(is_double), ~sum(is.na(.x)))
+  across(everything(), ~sum(is.na(.x)))
 ) %>% t() %>% data.frame()
 
-magrittr::`%<>%`(temp2, rownames_to_column())
+library(magrittr)
+temp2 %<>%  rownames_to_column()
 
 temp2 %>% mutate(
   prop = ./dim(raw_df)[2]
-) %>% arrange(prop)
+) %>% arrange(prop) %>% View()
 
 # check and remove necessary
+```
+
+# NA count for each index grouped by Year
+
+```{r}
+what <- (raw_df %>% group_by(Code) %>% summarise(Count = n())) %>% select(Code, Count)
+temp4 <- raw_df %>% # select(c(1,2,4:10)) %>% 
+  # filter(Code == "GDR" | Code == "USS") %>% 
+  group_by(Code) %>% 
+  summarise(
+    across(everything(), ~sum(is.na(.x)))
+  ) %>% 
+  select(-c(Year, award)) %>% arrange(Code) 
+
+temp5 <- bind_cols(what, temp4)
+View(temp5)
+# filter_at(vars(!contains(c("award", "Code", "Year"))), all_vars(rlang::are_na(.))) 
 ```
 
 # Find a possible year range for all indices
