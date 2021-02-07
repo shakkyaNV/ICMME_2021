@@ -1,0 +1,100 @@
+---
+title: "ICMME - emergency_Dataset fix"
+author: "eNVy"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NULL)
+# knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
+```
+
+```{r libs, include = F}
+library(tidyverse)
+library(magrittr)
+```
+# Get propotions ```test```
+
+```{r}
+prop_raw <- read_csv("../Data/heavy//merge_final.csv", col_types = cols(Code = col_character(), award = col_factor(), .default = col_double()))
+
+prop_raw %>% head()
+```
+
+```{r}
+prop_raw %>% select(2:4) -> df_test
+```
+
+```{r}
+award2 = factor(df_test$award) %>% 
+    fct_explicit_na("No medal") %>% 
+    fct_collapse(notNA = c("Gold medal", "Silver medal", "Bronze medal", "Honourable mention"),
+                       isNA = "No medal")
+```
+
+# df calculate binary T or F
+
+```{r}
+testtest <- df_test %>% cbind(award2) %>% group_by(Year, Code) %>% 
+  summarise(count_each = (fct_count(factor(award2)))$n, 
+            what_leve = (fct_count(factor(award2)))$f,
+            count_tot = n())
+```
+
+```{r}
+testtest %>% arrange(Code)
+```
+
+```{r}
+testTestTest <- testtest %>% 
+  pivot_wider(id_cols = c(Year, Code, count_tot), 
+              names_from = what_leve, 
+              values_from = c(count_each)) %>% 
+  mutate(
+    newNotNA = replace_na(notNA, 0),
+    newisNA  = replace_na(isNA, 0)
+  ) %>% 
+  transmute(notNAProp = newNotNA/count_tot, 
+            # isNAProp = newisNA/count_tot, 
+            # shouldbe = notNAProp + isNAProp, 
+            TF = ceiling(notNAProp))
+
+
+testTestTest %>% head()
+```
+```{r}
+df_emergency <- left_join(x = prop_raw, y = testTestTest, by = c("Year" , "Code"))
+
+df_emergency %>% head()
+```
+```{r}
+df_prop_and_TF <- df_emergency[, c(2,3,4,216,217, 5:215)]
+
+# write_csv(df_prop_and_TF, file = "../Data/heavy/df_prop_and_TF.csv" )
+```
+
+<!-- 
+# df calcualte props test
+```{r}
+df_test_prop <- df_test %>% cbind(award2) %>%
+  group_by(Year, Code) %>% 
+  summarise(fct_count(factor(award2), 
+                      prop = T))  %>% arrange(Code)
+  filter(f == 'isNA')
+
+df_test_prop %>% arrange(Code)
+```
+
+
+```{r}
+df_test_prop %<>% select(-all_of(c(3,4)))
+colnames(df_test_prop)[3] <- "naProp"
+
+names(df_test_prop)
+```
+
+```{r}
+left_join(x = prop_raw %>% select(1:4), y = df_test_prop, by = c("Year", "Code"), keep = FALSE) %>% arrange(Code)
+```
+-->

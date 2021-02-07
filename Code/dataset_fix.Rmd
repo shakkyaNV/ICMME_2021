@@ -12,13 +12,19 @@ knitr::opts_chunk$set(echo = TRUE, comment = NULL)
 
 ```{r libs, include = F}
 library(tidyverse)
+library(magrittr)
 ```
 
 # Dataset import RAW
 
 ```{r import, warning=F, message=F}
-raw_df <- read_csv("../Data/heavy/merge_initial.csv", col_names = T)
+raw_df <- read_csv("../Data/heavy/merge_initial.csv", 
+                   col_names = T,
+                   col_types = cols(Code = "c", award = "f", 
+                                    .default = col_double()), 
+                   )
 raw_df %>% head()
+
 ```
 
 # Indicator dfs
@@ -36,6 +42,7 @@ for (i in 1:length(indicator_temp_names)) {
   assign(indicator_temp_names[i], indicator_nested_tbl[[i]])
 }
 ```
+
 # Remove possible indicators
 
 ```{r}
@@ -46,7 +53,7 @@ temp %>% left_join(y = API_8_indicator,
                    by = 'INDICATOR_CODE')  %>% 
   select(c(1,7)) %>% View()
 
-# to be removed.txt
+# possible remove indices are in to be removed.txt
 ```
 
 
@@ -61,7 +68,7 @@ To do within data set
       + By index
       
     + Removed before
-      + A --> If all NA for every index for given country_index (All years) (NA Horz) -- Remove countr_index
+      + A --> If all NA for every index for given country_index (All years) (NA Horz) -- Remove country_index
       + B --> If all NA for every country_index for given index             (NA Vert) -- Remove index
       + C --> If all NA for every year for a given country for a given index (NA Vert, 1984 - 2017) -- Remove country
       
@@ -88,33 +95,37 @@ raw_df %>%
   mutate(
     rowSumNA = rowSums(is.na(raw_df))
   ) %>% group_by(Year, Code) %>% select(Year, Code, rowSumNA) %>% 
-  arrange(Code, Year) %>% unique() %>% View()
-```
+  arrange(Code, Year, rowSumNA) %>% unique() # %>% View()
 
+# 245 after removing incidec from to_be_removed.txt and prop > 0.8
+
+raw_df %>% filter(Code == "ALG")
+```
 
 # Count and proportion of NA by variable (Type B)
 
 ```{r}
 # test <- raw_df %>% head(40) %>% select(1:10)
-
 temp2 <- raw_df %>% summarise(
   across(everything(), ~sum(is.na(.x)))
 ) %>% t() %>% data.frame()
 
-library(magrittr)
 temp2 %<>%  rownames_to_column()
 
 temp2 %>% mutate(
-  prop = ./dim(raw_df)[2]
-) %>% arrange(prop) %>% View()
-
-# check and remove necessary
+  prop = ./(dim(raw_df)[1])
+) %>% arrange(desc(prop))#  -> temp3 # %>% View()
 ```
+
 
 # NA count for each index grouped by Year
 
 ```{r}
-what <- (raw_df %>% group_by(Code) %>% summarise(Count = n())) %>% select(Code, Count)
+what <- (raw_df %>% 
+           group_by(Code) %>% 
+           summarise(Count = n())) %>% 
+  select(Code, Count)
+
 temp4 <- raw_df %>% # select(c(1,2,4:10)) %>% 
   # filter(Code == "GDR" | Code == "USS") %>% 
   group_by(Code) %>% 
@@ -125,8 +136,49 @@ temp4 <- raw_df %>% # select(c(1,2,4:10)) %>%
 
 temp5 <- bind_cols(what, temp4)
 View(temp5)
-# filter_at(vars(!contains(c("award", "Code", "Year"))), all_vars(rlang::are_na(.))) 
+
+# temp5
+
+# remove years with matching Counts and NAs
 ```
+
+
+```{r}
+# make a copy of raw_df before proceeding
+raw_df -> raw_df_copy
+```
+
+# Remove selected ```indices``` and ```Codes```
+
+## Remove indices pre identified via manual search of indices
+
+```{r}
+# from tobe_removed.txt
+to_be_removed <- c(18:21, 23,25, 39, 41, 43,65, 67, 69, 77, 79, 81, 111, 115,116, 118,119, 121:124, 126,127, 129,130, 135, 137, 139, 141, 140, 144,145, 146, 178, 206, 221, 271, 281, 284, 286, 288, 314, 315, 329:331, 335, 342, 340, 367, 398, 426)
+
+raw_df %<>% select(-all_of(to_be_removed))
+```
+
+resulting dim() = 14835 372
+rerun above codes to see diff.
+
+## Remove indices with more than `r upper_bound_prop` empty prop
+
+```{r}
+upper_bound_prop = 0.8
+
+temp3 %>% filter(prop > upper_bound_prop) %>% 
+  pull(var = rowname) %>% 
+  as.vector() -> var_indiceRemove_tooManyNA 
+
+raw_df %<>% select(-any_of(var_indiceRemove_tooManyNA))
+# check and remove necessary
+```
+
+```{r}
+raw_df %>% dim()
+```
+
 
 # Find a possible year range for all indices
 
@@ -139,4 +191,6 @@ raw_df %>%
 # find a possible lower bound that's good (possible future approx()) for most of the countries
 raw_df %>% select(Code) %>% unique() %>% count()
 ```
+
+
 
