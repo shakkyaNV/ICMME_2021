@@ -74,6 +74,8 @@ df_prop_and_TF <- df_emergency[, c(2,3,4,216,217, 5:215)]
 # write_csv(df_prop_and_TF, file = "../Data/heavy/df_prop_and_TF.csv" )
 ```
 
+
+
 <!-- 
 # df calcualte props test
 ```{r}
