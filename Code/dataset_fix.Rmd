@@ -14,9 +14,11 @@ knitr::opts_chunk$set(echo = TRUE, comment = NULL)
 library(tidyverse)
 library(magrittr)
 library(rlang)
+
+step_AIC <- MASS::stepAIC
 ```
 
-# Dataset import RAW
+# Dataset import RAWSE
 
 ```{r import, warning=F, message=F}
 raw_df <- read_csv("../Data/heavy/merge_initial.csv", 
@@ -226,6 +228,8 @@ df_to_lm <- read_csv("../Data/heavy/lm_initial.csv",
                    col_types = cols(Code = "c", 
                                     .default = col_double()))
 
+df_to_lm %<>% rename("Pupil_teacher_ratio" = "Pupil-teacher ratio in pre-primary education (headcount basis)")
+
 df_to_lm %>% dim()
 
 ```
@@ -280,6 +284,11 @@ test_lm[6, 3] = NA
 ```{r}
 # function get position
 getPos <- function(df, var, posList, gpvar, m) {
+  # df = data frame (before grouping)
+  # var = selected indices
+  # posList = empty list in begining. Added country wise elements for given index. reset for each new variable
+  # gpvar = gped country variable
+  # m = length of grouped df (for checking all nas)
 
   var <- enquo(var)
   
@@ -320,9 +329,9 @@ getPos <- function(df, var, posList, gpvar, m) {
 ```{r}
 # group by tibble for each country within the set index
 get_gp_tbl <- function(df, var) {
-  
   # var = fixing variable
   # gpvar = Each country code to group_by
+  
   var = enquo(var)
   
   # get NA information of other columns --> predict
@@ -372,7 +381,6 @@ get_gp_tbl <- function(df, var) {
 ```{r}
 # replace identified NA positions
 replaceNA_pos <- function(df, var, row_Col_list, preds, gpvar) {
-  
   # df = dataframe initial
   # row_col_list = positions of each NA
   # preds = Predictions made by lm or step.model
@@ -393,8 +401,7 @@ replaceNA_pos <- function(df, var, row_Col_list, preds, gpvar) {
   # cat("rows in grped vars are: ", rows_in_gpvar)
   
   for (j in 1:length(rows)) {
-    cat("replacing", rows[j], col[1], "\n")
-    cat(preds[[j]], "\n")
+    cat("Replacing ", rows[j], col[1], " with ", preds[[j]], "\n")
     df[rows[j], col[1]] <- preds[[j]]
   }
   cat("Went through replace_NA \n")
@@ -403,6 +410,7 @@ replaceNA_pos <- function(df, var, row_Col_list, preds, gpvar) {
 
 ```
 
+
 ```{r}
 # repalce remaining NAs with mean
 # nothing to do
@@ -410,11 +418,12 @@ replaceNA_pos <- function(df, var, row_Col_list, preds, gpvar) {
 replace_by_mean <- function(df, var) {
   var = enquo(var)
   
+  cat("Runinng in final. Mean replace method initiated \n")
+  
   df %<>% mutate(
     !!var := replace_na(df[[as_label(var)]], 
                         mean(df[[as_label(var)]], na.rm = T))
   )
-  cat("running in final replace by mean \n")
   return(df)
 }
 ```
@@ -428,8 +437,8 @@ imputeMineTest1 <- function(df, var, ...) {
   # require(rlang)
   # require(magrittr)
   
-  # print(parent.frame()$i)
-  # var = parent.frame()$i %>% sym() # remove for for loops
+  print(parent.frame()$list[i]) # remove this ad hoc solutions
+  var = parent.frame()$list[i] %>% sym() # comment for single index tests
   var <- enquo(var) 
   dfname <- substitute(df)
   
@@ -462,6 +471,7 @@ imputeMineTest1 <- function(df, var, ...) {
     # get customized grouped tibble
     grouped_tbl <- get_gp_tbl(df = df_bind_gpd, 
                               var = !!var)
+    
     suppressWarnings(
     df_bind <- grouped_tbl$df %>% 
       unnest())
@@ -475,8 +485,7 @@ imputeMineTest1 <- function(df, var, ...) {
     
     # check vars
     if(is_empty(vars)){
-      warning("No suitable variables to call by. 
-              Mean replace initiated")
+      warning("No suitable variables to call by.")
       
       vars = c('Year')
     }
@@ -492,12 +501,30 @@ imputeMineTest1 <- function(df, var, ...) {
       lm(formula = formula, data = df_bind)
       )
     
-    Model_lm <- eval(Model_call)
+    LMmodel <- function(Model_call) {
+      tryCatch(
+        expr = {
+          Model_lm <- eval(Model_call) 
+          return(Model_lm)
+        },
+        error = function(cond){
+            message("Linear model failed. Indice will be skipped")
+            return(NULL)
+        }
+      )
+    }
+    
+    Model_lm <- LMmodel(Model_call)
+    if (is_null(Model_lm)) next
+      
     preds <- predict.lm(Model_lm, newdata = df_bind_na)
     
     rsq = summary(Model_lm)$r.squared
-    
-    if (rsq > 0.7) {
+
+    if (rsq > 0.7 | is_na(rsq)) {
+      
+      # is_na(rsq) is checked for zero variance indices
+      # such vars only have intercept.
       
       # predict here (use above dataframe df_var_na)
       cat("Linear model is used \n")
@@ -507,18 +534,20 @@ imputeMineTest1 <- function(df, var, ...) {
       warning("R Squared is less than 0.7.
               Implemneting stepAIC model\n")
       
-      AICmodel <- function(Model_lm) {
+      AICmodel <- function(Model_lm, rsq) {
         tryCatch(
           expr = {
             # drop from full_lm model
-            Model_AIC <- MASS::stepAIC(Model_lm, 
+            Model_AIC <- step_AIC(Model_lm, 
                                        direction = "both", 
                                        trace = F)
-            
-            predict.lm(Model_AIC, newdata = df_bind_na)
-            
-            
-            return(c(preds,rsq))
+            if (summary(Model_AIC)$r.squared <= rsq) {
+              return(NULL)
+              }
+            else{
+              return(predict = predict.lm(Model_AIC, newdata = df_bind_na), 
+                     rsq = summary(Model_AIC)$r.squared)
+              }
             },
       
           error = function(cond){
@@ -527,20 +556,22 @@ imputeMineTest1 <- function(df, var, ...) {
             },
           
           warning = function(cond){
-            messages("somewarning")
+            message("somewarning")
             return(NULL)
             }
         )
       }
-      pred_AIC <- AICmodel(Model_lm)
+      pred_AIC <- AICmodel(Model_lm, rsq)
       
       if(is_null(pred_AIC)){
         preds <- predict.lm(Model_lm, newdata = df_bind_na)
       }
       else{
-        preds <- pred_AIC
+        preds <- pred_AIC[['predict']]
+        rsq  <- pred_AIC[['rsq']]
       }
     }
+    
     cat("r squared is:", rsq, "\n")
     
     # replace NA positions # assign to global variable
@@ -554,36 +585,51 @@ imputeMineTest1 <- function(df, var, ...) {
   df <- replace_by_mean(df, !!var)
   
   return(df)
+}
+
+```
+
+# Dataset fix
+
+```{r}
+doParallel::registerDoParallel()
+
+#get list of vars to fix in given dataset
+listVars <- function(df) {
   
+  index_list <- df %>% 
+    select_if(~any(is.na(.))) %>% 
+    names() %>% 
+    as.vector()
+  return(index_list)
 }
 
-```
+list <- listVars(df_to_lm)
 
-
-```{r}
-for (i in c("meat_index", "lower_secnd_edu_index")) {
-    imputeMineTest1(test_lm, i)
+for (i in 1:length(list)) {
+    df_to_lm <- imputeMineTest1(df_to_lm, list[i])
 }
 ```
 
-
 ```{r}
-# test here
-res <- imputeMineTest1(test_lm, meat_index)
+# write_csv(df_to_lm, file = "../Data/heavy/replaced_lm.csv")
 
-new_data = data.frame(Year = 2014, 
-                      egg_index = 14.57, 
-                      entrance_age_index = NA, 
-                      life_exp_primary_edu_index = 3.1697, 
-                      lower_secnd_edu_index = 109.54 )
+df_prop = read_csv("../Data/heavy/df_prop_and_TF.csv")
 
-predict.lm(eval(res), na.exclude(new_data))
+df_prop %>% select(c(1,2,4,5)) %>% unique() %>% arrange(Code)
+
 ```
 
+# Join the made indices of ```notNAProp``` and ```TF``` with the fixed dataset
+
 ```{r}
-df_to_lm %>% 
-  head(100) %>% 
-  filter_at(vars(egg_index), all_vars(!are_na(.)))
+datasetFixed <- left_join(
+  x = df_to_lm, 
+  y = df_prop, 
+  by = c("Year", "Code")
+)
+
+datasetFixed %>% View()
 ```
 
 

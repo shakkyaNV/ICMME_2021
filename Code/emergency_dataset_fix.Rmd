@@ -17,13 +17,13 @@ library(magrittr)
 # Get propotions ```test```
 
 ```{r}
-prop_raw <- read_csv("../Data/heavy//merge_final.csv", col_types = cols(Code = col_character(), award = col_factor(), .default = col_double()))
+prop_raw <- read_csv("../Data/heavy//merge_initial.csv", col_types = cols(Code = col_character(), award = col_factor(), .default = col_double()))
 
 prop_raw %>% head()
 ```
 
 ```{r}
-prop_raw %>% select(2:4) -> df_test
+prop_raw %>% select(1:3) -> df_test
 ```
 
 ```{r}
@@ -64,15 +64,21 @@ testTestTest <- testtest %>%
 testTestTest %>% head()
 ```
 ```{r}
-df_emergency <- left_join(x = prop_raw, y = testTestTest, by = c("Year" , "Code"))
 
-df_emergency %>% head()
-```
-```{r}
-df_prop_and_TF <- df_emergency[, c(2,3,4,216,217, 5:215)]
+df_lm_filled <- read_csv("../Data/heavy/replaced_lm.csv", 
+                         col_types = cols(Code = col_character(), 
+                                          award = col_factor(), .default = col_double()))
 
-# write_csv(df_prop_and_TF, file = "../Data/heavy/df_prop_and_TF.csv" )
+df_fixed <- left_join(x = df_lm_filled, y = testTestTest, by = c("Year" , "Code"))
+
+df_fixed %<>% relocate(c(notNAProp, TF), .after = Code)
+
+df_fixed %>% head() %>% View()
+
+# write_csv(df_fixed, "../Data/heavy/df_fixed.csv")
 ```
+
+
 
 
 

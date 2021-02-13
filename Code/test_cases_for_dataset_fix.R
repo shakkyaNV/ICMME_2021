@@ -24,15 +24,16 @@ res2 <- res %>%
 df_to_lm %>% filter(Code == "BWA") %>% View()
 
 # ***********
-df1 <- df_to_lm %>% filter(Code == "KAZ")
+df1 <- test_lm %>% filter(Code == "AUS")
 
 df <- bind_cols( df1  %>% 
              select_if(~!any(is.na(.))),
            df1 %>% 
-             select(meat_index))
+             select(lower_secnd_edu_index))
 
 # ***********
-less <- get_gp_tbl(df, meat_index, "KAZ")
+less <- get_gp_tbl(df, lower_secnd_edu_index)
+
 final_df <- imputeMineTest1(df1, meat_index)
 
 # ***********
