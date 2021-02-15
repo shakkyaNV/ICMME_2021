@@ -13,25 +13,77 @@ knitr::opts_chunk$set(echo = TRUE)
 ```{r, warning=FALSE,message=FALSE}
 library(tidyverse)
 library(caret)
+library(rpart) #cart
+library(randomForest) #random forest
+library(e1071)#naive bayes
+library(ROSE) #resampling
 ```
 
+
 ```{r}
-split_train<- read.csv("../Data/heavy/split_train.csv") %>%
-  select(-1)
-split_test<- read.csv("../Data/heavy/split_test.csv") %>%
-  select(-1)
-split_train$award<- ordered(as.factor(split_train$award))
-split_test$award<- ordered(as.factor(split_test$award))
+df_cls<-read.csv("D:/Stat/ICMME/Data/heavy/df_fixed.csv")
+df_cls %<>% select(-c(1:3))
+df_cls[1] %<>% modify(. , as.factor)
+
+set.seed(8080)
+split_cls<- initial_split(df_cls, strata = TF, prop=0.75)
+train_cls<- training(split_cls)
+test_cls<- testing(split_cls)
+
+```
+
+##Resampling Data
+```{r}
+balanced_df <- ovun.sample(TF~., data=df_cls,
+                                N=nrow(df_cls), p=0.5, 
+                                seed=1, method="both")$data
+prop.table(table(balanced_df$TF))
+set.seed(800)
+split_balanced<-initial_split(balanced_df)
+balanced_train<- training(split_balanced)
+balanced_test<- testing(split_balanced)
 ```
 
 ## Support Vector Machine (SVM)
+
 ```{r}
 trctrl <- trainControl(method = "cv", number = 10)
-model_svm <- train(award ~., data = split_train, method = "svmLinear",
+model_svm <- train(TF ~., data = balanced_train, method = "svmLinear",
 trControl=trctrl, tuneLength = 10)
-model_svm
-predictions_svm<- predict(model_svm, split_test)
-confusionMatrix(table(predictions_svm, split_test$award))
+
+predictions_svm<- predict(model_svm, balanced_test)
+confusionMatrix(table(predictions_svm, balanced_test$TF))
+```
+
+
+##Classification & Regression Tree (CART)
+
+```{r}
+#model fitting
+model_cart<- rpart(TF~., data=balanced_train, method = "class")
+printcp(model_cart)
+plotcp(model_cart)
+#summary(model_cart)
+predictions_cart<- predict(model_cart, balanced_test, type = "class")
+confusionMatrix(table(predictions_cart, balanced_test$TF))
+
+#pruning
+model_cart_prune<- prune(model_cart, 
+cp= model_cart$cptable[which.min(model_cart$cptable[,"xerror"]),"CP"] )
+predictions_cart_prune<- predict(model_cart_prune,
+                                 balanced_test, type = "class")
+confusionMatrix(table(predictions_cart_prune, balanced_test$TF))
+
+```
+
+
+##Random Forest
+```{r}
+model_rf<- randomForest(TF~., data=balanced_train, importance=T)
+#model_rf
+predictions_rf<- predict(model_rf, balanced_test)
+confusionMatrix(table(predictions_rf, balanced_test$TF))
+
 ```
 
 

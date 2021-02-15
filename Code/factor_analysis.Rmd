@@ -1,0 +1,72 @@
+---
+title: "Factor Analysis"
+author: "HH"
+date: "2/1/2021"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(FactoMineR)
+library(factoextra)
+library(ggplot2)
+```
+
+
+```{r}
+fa_df1<- read.csv("D:/Stat/ICMME/Data/heavy/df_prop_and_TF.csv")
+
+```
+
+
+```{r}
+factanal(fa_df1[,c(5:25)], factors = 2)
+
+```
+
+
+```{r}
+pca<- FactoMineR:: PCA(fa_df1[,-c(1:5)], graph = F)
+factoextra:: fviz_eig(pca, addlabels = TRUE, ylim = c(0, 50))
+```
+
+
+```{r}
+pca_df2<-as.matrix(fa_df1[,-c(1:5)])
+corr<-cor(pca_df2)
+fit<- princomp(pca_df2, cor = T)
+plot(fit, type="lines")
+```
+
+
+```{r}
+#PCA using tidymodels
+df_pca<-read.csv("D:/Stat/ICMME/Data/heavy/df_fixed.csv")
+df_pca %<>% select(-c(1:4))
+
+pca_recipe <- recipe(~., data = df_pca)
+
+pca_trans <- pca_recipe %>%
+  step_center(all_numeric()) %>%  
+  step_scale(all_numeric()) %>%
+  step_pca(all_numeric())
+
+pca_estimates <- prep(pca_trans)
+
+juice(pca_estimates)
+
+sdev <- pca_estimates$steps[[3]]$res$sdev
+percent_variation <- sdev^2 / sum(sdev^2)
+var_df <- data.frame(PC=paste0("PC",1:length(sdev)),
+                     var_explained=percent_variation,
+                     stringsAsFactors = FALSE)
+var_df %>%
+  mutate(PC = fct_inorder(PC)) %>%
+  ggplot(aes(x=PC,y=var_explained))+geom_col()
+```
+

@@ -1,0 +1,199 @@
+---
+title: "Classification for TF"
+author: "HHDS"
+date: "2/15/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(themis)
+library(magrittr)
+library(ROSE)
+```
+
+##Import Data
+
+```{r}
+df_cls<-read.csv("D:/Stat/ICMME/Data/heavy/df_fixed.csv")
+df_cls %<>% select(-c(1:3))
+df_cls[1] %<>% modify(. , as.factor)
+#df_cls %>% glimpse()
+```
+
+##Data Splitting
+
+```{r}
+set.seed(8080)
+split_cls<- initial_split(df_cls, strata = TF, prop=0.75)
+train_cls<- training(split_cls)
+test_cls<- testing(split_cls)
+
+
+rbind(
+  data= prop.table(table(df_cls$TF)),
+  train= prop.table(table(train_cls$TF)),
+  test= prop.table(table(test_cls$TF))
+)
+
+```
+
+
+##Resampling
+
+```{r}
+balanced_df <- ovun.sample(TF~., data=df_cls,
+                                N=nrow(df_cls), p=0.5, 
+                                seed=1, method="both")$data
+prop.table(table(balanced_df$TF))
+set.seed(800)
+split_balanced<-initial_split(balanced_df)
+balanced_train<- training(split_balanced)
+balanced_test<- testing(split_balanced)
+
+rbind(
+  balanced_data= prop.table(table(balanced_df$TF)),
+  balanced_train= prop.table(table(balanced_train$TF)),
+  balanced_test= prop.table(table(balanced_test$TF))
+)
+```
+
+##Random Forest
+
+```{r}
+#Model fitting
+rf <- rand_forest(trees = 100) %>% 
+  set_engine("ranger", num.threads=3, seed = 123) %>%
+  set_mode("classification")
+
+data_rec <- recipe(TF~., data=balanced_train) %>% 
+  step_zv(all_predictors()) %>% 
+  #step_corr(all_predictors(), threshold = 0.8) %>% 
+  step_normalize(all_predictors()) 
+  #step_smote(TF) 
+
+rf_wf <- workflow() %>% 
+  add_model(rf) %>% 
+  add_recipe(data_rec)
+
+model_rf <- rf_wf %>% 
+  fit(data = balanced_train)
+
+model_rf %>% pull_workflow_fit()
+```
+
+
+```{r}
+#Prediction
+model_rf %>% 
+  predict( new_data = balanced_test) %>% 
+  bind_cols(balanced_test["TF"]) %>% 
+  accuracy(truth= as.factor(TF), .pred_class) 
+
+caret::confusionMatrix(as.factor(balanced_test$TF), predict(model_rf, new_data = balanced_test)$.pred_class)
+
+```
+
+
+```{r}
+#Model tuning
+model_tune <- rand_forest(trees= 100, mtry=tune(), min_n = tune()) %>%
+  set_engine("ranger", num.threads=3, seed=123) %>% 
+  set_mode("classification")
+
+grid <- grid_regular(mtry(range = c(9,15)), min_n(range = c(5,40)), levels = 3)
+
+train <- prep(data_rec) %>% 
+  juice()
+test <- prep(data_rec) %>% 
+  bake(test_cls)
+
+set.seed(111)
+fold <- vfold_cv(train, v = 3, strata = TF)
+
+tune_wf <- workflow() %>% 
+  add_model(model_tune) %>%
+  add_formula(TF~.)
+
+tune_rf <- tune_wf %>% 
+  tune_grid(resamples = fold, grid = grid)
+
+tune_rf %>% collect_metrics()
+
+best_param <- 
+  tune_rf %>% select_best(metric = "accuracy")
+tune_wf2 <- tune_wf %>% 
+  finalize_workflow(best_param)
+best_model <- tune_wf2 %>% 
+  fit(train)
+best_model
+caret::confusionMatrix(as.factor(test$TF), predict(best_model, 
+                                                       new_data = test)$.pred_class)
+
+
+```
+
+
+##Logistic Regression
+
+```{r}
+#model fitting
+logit <- logistic_reg() %>% 
+  set_engine("glm") %>%
+  set_mode("classification")
+
+logit_wf <- workflow() %>% 
+  add_model(logit) %>% 
+  add_recipe(data_rec)
+
+set.seed(123)
+model_logit <- logit_wf %>% 
+  fit(data = balanced_train)
+
+#model_logit %>% pull_workflow_fit()
+
+#prediction
+model_logit %>% 
+  predict( new_data = balanced_test) %>% 
+  bind_cols(balanced_test["TF"]) %>% 
+  accuracy(truth= as.factor(TF), .pred_class)
+
+caret::confusionMatrix(as.factor(balanced_test$TF), predict(model_logit, new_data = balanced_test)$.pred_class)
+
+
+```
+
+
+##Support Vector Machine
+```{r}
+#model fitting
+svm<- svm_poly(degree = 1, cost = 1/4) %>% 
+  set_engine("kernlab") %>% 
+  set_mode("classification")
+
+svm_wf <- workflow() %>% 
+  add_model(svm) %>% 
+  add_recipe(data_rec)
+
+set.seed(123)
+model_svm <- svm_wf %>% 
+  fit(data = balanced_train)
+
+model_svm %>% pull_workflow_fit()
+
+#prediction
+model_svm %>% 
+  predict( new_data = balanced_test) %>% 
+  bind_cols(balanced_test["TF"]) %>% 
+  accuracy(truth= as.factor(TF), .pred_class)
+
+caret::confusionMatrix(as.factor(balanced_test$TF), predict(model_svm, new_data = balanced_test)$.pred_class)
+
+```
+
