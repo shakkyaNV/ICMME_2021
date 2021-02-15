@@ -29,8 +29,8 @@ prop_raw %>% select(1:3) -> df_test
 ```{r}
 award2 = factor(df_test$award) %>% 
     fct_explicit_na("No medal") %>% 
-    fct_collapse(notNA = c("Gold medal", "Silver medal", "Bronze medal", "Honourable mention"),
-                       isNA = "No medal")
+    fct_collapse(notNA = "Gold medal",
+                       isNA = c("Silver medal", "Bronze medal", "Honourable mention", "No medal"))
 ```
 
 # df calculate binary T or F
