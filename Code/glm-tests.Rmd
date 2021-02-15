@@ -22,13 +22,18 @@ library(glmnet)
 ```{r}
 # test read and raw read
 raw_df<- read_csv("../Data/heavy/merge_final.csv")
+raw_fixed <- read_csv("../Data/heavy/df_fixed.csv", col_types = cols( 
+  TF = col_character(), 
+  Code = col_character(), 
+  .default = col_double()
+))
 # raw_df %>% glimpse()
 ```
 
 
 ```{r}
 # cleaning
-raw_df %>% head()
+raw_fixed %>% head()
 
 award_levels <- c("Gold medal",  # factor levels
                   "Silver medal", 
@@ -48,7 +53,11 @@ initial_df %<>% mutate(
   fct_rev() %>% # reversed to say NA < HM < B < S < Gold
   factor(ordered = T) # make ordinal
   ) 
-
+raw_fixed %<>% mutate(
+  TF = factor(TF)
+)
+raw_fixed %>% select(-any_of(c('Year', 'Code', 'TF'))) -> df_for_linear_reg
+raw_fixed %>% select(-any_of(c('Year', 'Code', 'notNAProp'))) -> df_for_logistic_reg
 ```
 
 
@@ -57,7 +66,7 @@ initial_df %<>% mutate(
 # see proportions
 set.seed(808)
 
-split_initial <- initial_split(initial_df, 
+split_initial <- initial_split(df_for_logistic_reg, 
                                prop = 0.75)
 
 split_train <- training(split_initial)
@@ -81,12 +90,12 @@ Things to do before recipe
 ```{r}
 # recipe
 
-olim_recipe <- recipe(~., data = split_train) %>% 
+olim_recipe <- recipe(TF ~., data = split_train) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>% 
   # step_ordinalscore(all_nominal()) %>% 
-  update_role(award, new_role = "outcome")
+  # update_role(TF, new_role = "outcome") %>% 
   # step_dummy(all_outcomes(), -all_numeric()) %>%  
-  # step_nzv(all_predictors())
+  step_nzv(all_predictors())
   
 olim_recipe <- prep(olim_recipe, training = split_train)
   
@@ -118,10 +127,10 @@ wf <- workflow() %>%
   add_recipe(olim_recipe)
 
 # model specs
-lasso_spec <- multinom_reg(penalty = 0.1, mixture = 1) %>% 
+lasso_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>% 
   set_engine("glmnet") %>% 
-  set_mode("classification") %>% 
-  set_args(family = "multinomial") # %>% set_args(type = "response")
+  set_mode("classification") # %>% 
+  # set_args(family = "gaussian") # %>% set_args(type = "response")
 
 # model specification in detail
 lasso_spec %>% translate()
@@ -156,7 +165,7 @@ lasso_fit %>% pull_workflow_fit() %>%
 lasso_fit_object <- (lasso_fit %>% pull_workflow_mold())
 
 # confusion matrix for train
-table(lasso_fit_object$outcomes$award, split_train$award)
+table(lasso_fit_object$outcomes$notNAProp, split_train$notNAProp)
 # huh?
 ```
 ### Parameter tune and finalize workflow
@@ -166,11 +175,11 @@ set.seed(2020)
 
 olim_resample_boot <- bootstraps(train_data, breaks = 5)
 
-tune_spec <- multinom_reg(penalty = tune(), 
+tune_spec <- logistic_reg(penalty = tune(), 
                         mixture = 1) %>% 
     set_engine("glmnet") %>% 
   set_mode("classification") %>% 
-  set_args(family = "multinomial")
+  set_args(family = "binomial")
 
 penalty_grid <- grid_regular(penalty(), levels = 20)
 ```
@@ -194,7 +203,7 @@ lasso_grid <- tune_grid(wf %>% add_model(tune_spec),
 # see the grid and collect best gird option
 lasso_grid %>% collect_metrics()
 
-low_acc <- lasso_grid %>% select_best(metric = "accuracy", penalty)
+low_acc <- lasso_grid %>% select_best(metric = "roc_auc", penalty)
 
 final_fit_lasso<- finalize_workflow(wf %>% add_model(tune_spec), 
                              low_acc)
@@ -258,11 +267,11 @@ pred %>% collect_metrics()
 
 # ridge model specs
 
-ridge_initial_spec <- multinom_reg(penalty = 0.1, 
+ridge_initial_spec <- linear_reg(penalty = 0.1, 
                                    mixture = 0) %>% 
   set_engine("glmnet") %>% 
-  set_mode("classification") %>% 
-  set_args(family = "multinomial") 
+  set_mode("regression") %>% 
+  set_args(family = "gaussian") 
 
 ridge_initial_spec %>% translate()
 ```
@@ -289,11 +298,11 @@ set.seed(2020)
 
 olim_resample_boot <- bootstraps(train_data, breaks = 4)
 
-tune_ridge_spec <- multinom_reg(penalty = tune(), 
+tune_ridge_spec <- linear_reg(penalty = tune(), 
                                 mixture = 0) %>% 
   set_engine("glmnet") %>% 
-  set_mode("classification") %>% 
-  set_args(family = "multinomial")
+  set_mode("regression") %>% 
+  set_args(family = "gaussian")
 
 penalty_grid_ridge <- grid_regular(penalty(), levels = 20 )
 ```
@@ -320,7 +329,7 @@ ridge_grid %>% collect_metrics()
 # select model and finalize wf()
 
 low_roc_ridge <- ridge_grid %>% 
-  select_best(metric = "accuracy", penalty) 
+  select_best(metric = "rsq", penalty) 
 
 final_fit_ridge <- finalize_workflow(wf %>% add_model(tune_ridge_spec), 
                                      low_roc_ridge)
