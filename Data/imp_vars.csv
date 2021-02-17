@@ -1,0 +1,47 @@
+Variable,Sign,INDICATOR_NAME
+SH.HIV.INCD,POS,Adults (ages 15-49) newly infected with HIV
+milk_index,NEG,NA
+SH.HIV.INCD.ZS,NEG,"Incidence of HIV, ages 15-49 (per 1,000 uninfected population ages 15-49)"
+SP.POP.TOTL,POS,"Population, total"
+SH.IMM.MEAS,POS,"Immunization, measles (% of children ages 12-23 months)"
+SH.MED.BEDS.ZS,POS,"Hospital beds (per 1,000 people)"
+SP.DYN.LE00.FE.IN,POS,"Life expectancy at birth, female (years)"
+SH.HIV.INCD.TL.P3,NEG,"Incidence of HIV, all (per 1,000 uninfected population)"
+SH.DYN.1519,NEG,"Probability of dying among adolescents ages 15-19 years (per 1,000)"
+SE.SEC.ENRL,POS,"Secondary education, pupils"
+SP.POP.7579.MA.5Y,POS,"Population ages 75-79, male (% of male population)"
+SH.ANM.ALLW.ZS,NEG,Prevalence of anemia among women of reproductive age (% of women ages 15-49)
+SE.PRM.ENRL,POS,"Primary education, pupils"
+SE.SEC.ENRR.FE,NEG,"School enrollment, secondary, female (% gross)"
+SP.POP.2024.FE.5Y,NEG,"Population ages 20-24, female (% of female population)"
+SP.DYN.LE00.MA.IN,NEG,"Life expectancy at birth, male (years)"
+SP.POP.5054.FE.5Y,POS,"Population ages 50-54, female (% of female population)"
+SP.POP.6064.FE.5Y,POS,"Population ages 60-64, female (% of female population)"
+SP.POP.80UP.FE.5Y,NEG,"Population ages 80 and above, female (% of female population)"
+SH.XPD.GHED.CH.ZS,NEG,Domestic general government health expenditure (% of current health expenditure)
+SH.MMR.DTHS,NEG,Number of maternal deaths
+SP.DYN.CDRT.IN,POS,"Death rate, crude (per 1,000 people)"
+egg_index,POS,NA
+SH.MED.PHYS.ZS,POS,"Physicians (per 1,000 people)"
+SP.POP.5054.MA.5Y,NEG,"Population ages 50-54, male (% of male population)"
+SP.POP.0004.FE.5Y,NEG,"Population ages 00-04, female (% of female population)"
+SH.STA.BASS.UR.ZS,NEG,"People using at least basic sanitation services, urban (% of urban population)"
+SE.SEC.ENRL.TC.ZS,NEG,"Pupil-teacher ratio, secondary"
+SE.TER.ENRL.TC.ZS,NEG,"Pupil-teacher ratio, tertiary"
+SP.POP.0004.MA.5Y,NEG,"Population ages 00-04, male (% of male population)"
+SL.UEM.TOTL.FE.ZS,NEG,"Unemployment, female (% of female labor force) (modeled ILO estimate)"
+SP.POP.1519.MA.5Y,POS,"Population ages 15-19, male (% of male population)"
+SE.PRM.NENR,NEG,"School enrollment, primary (% net)"
+SE.SEC.ENRL.GC,NEG,"Secondary education, general pupils"
+SP.POP.7074.MA.5Y,POS,"Population ages 70-74, male (% of male population)"
+SH.DYN.AIDS.FE.ZS,POS,Women's share of population ages 15+ living with HIV (%)
+SH.IMM.HEPB,NEG,"Immunization, HepB3 (% of one-year-old children)"
+SH.HIV.1524.FE.ZS,NEG,"Prevalence of HIV, female (% ages 15-24)"
+SH.HIV.INCD.YG,NEG,Young people (15-24) newly infected with HIV
+SP.POP.1519.FE.5Y,NEG,"Population ages 15-19, female (% of female population)"
+SP.POP.4044.MA.5Y,NEG,"Population ages 40-44, male (% of male population)"
+SE.SEC.ENRR.MA,POS,"School enrollment, secondary, male (% gross)"
+SH.STA.ODFC.UR.ZS,POS,"People practicing open defecation, urban (% of urban population)"
+SP.DYN.CBRT.IN,NEG,"Birth rate, crude (per 1,000 people)"
+SH.PRG.ANEM,POS,Prevalence of anemia among pregnant women (%)
+SP.POP.DPND.YG,POS,"Age dependency ratio, young (% of working-age population)"

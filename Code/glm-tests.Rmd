@@ -35,27 +35,28 @@ raw_fixed <- read_csv("../Data/heavy/df_fixed.csv", col_types = cols(
 # cleaning
 raw_fixed %>% head()
 
-award_levels <- c("Gold medal",  # factor levels
-                  "Silver medal", 
-                  "Bronze medal", 
-                  "Honourable mention",
-                  "Not awarded")
+# award_levels <- c("Gold medal",  # factor levels
+#                   "Silver medal", 
+#                   "Bronze medal", 
+#                   "Honourable mention",
+#                   "Not awarded")
+# 
+# initial_df <- raw_df %>%
+#   select(-c(1:3)) %>% 
+#   mutate(
+#     award = replace_na(award, "Not awarded"), 
+#     award = as.factor(award))
+# 
+# initial_df %<>% mutate( 
+#     award = fct_relevel(initial_df$award,  # order re-ordered 
+#             award_levels) %>% 
+#   fct_rev() %>% # reversed to say NA < HM < B < S < Gold
+#   factor(ordered = T) # make ordinal
+#   ) 
+# raw_fixed %<>% mutate(
+#   TF = factor(TF)
+# )
 
-initial_df <- raw_df %>%
-  select(-c(1:3)) %>% 
-  mutate(
-    award = replace_na(award, "Not awarded"), 
-    award = as.factor(award))
-
-initial_df %<>% mutate( 
-    award = fct_relevel(initial_df$award,  # order re-ordered 
-            award_levels) %>% 
-  fct_rev() %>% # reversed to say NA < HM < B < S < Gold
-  factor(ordered = T) # make ordinal
-  ) 
-raw_fixed %<>% mutate(
-  TF = factor(TF)
-)
 raw_fixed %>% select(-any_of(c('Year', 'Code', 'TF'))) -> df_for_linear_reg
 raw_fixed %>% select(-any_of(c('Year', 'Code', 'notNAProp'))) -> df_for_logistic_reg
 ```
@@ -66,7 +67,16 @@ raw_fixed %>% select(-any_of(c('Year', 'Code', 'notNAProp'))) -> df_for_logistic
 # see proportions
 set.seed(808)
 
-split_initial <- initial_split(df_for_logistic_reg, 
+# resample_obj <- ovun.sample(TF~.,
+#                     data = df_for_logistic_reg,
+#                     N = dim(df_for_logistic_reg)[1],
+#                     p = 0.5,
+#                     seed = 808,
+#                     method = "both")
+
+                                  
+split_initial <- initial_split(df_for_logistic_reg,
+                               strata = TF,
                                prop = 0.75)
 
 split_train <- training(split_initial)
@@ -92,14 +102,17 @@ Things to do before recipe
 
 olim_recipe <- recipe(TF ~., data = split_train) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>% 
+  themis::step_upsample(TF) %>% 
   # step_ordinalscore(all_nominal()) %>% 
   # update_role(TF, new_role = "outcome") %>% 
   # step_dummy(all_outcomes(), -all_numeric()) %>%  
-  step_nzv(all_predictors())
+  step_nzv(all_predictors()) %>% 
+  step_zv(all_predictors()) %>% 
+  prep(training = split_train, retain = T)
   
-olim_recipe <- prep(olim_recipe, training = split_train)
+# olim_recipe <- prep(olim_recipe, training = split_train, retain = T)
   
-train_data = bake(olim_recipe, split_train)
+train_data = bake(olim_recipe, new_data = NULL)
 test_data = bake(olim_recipe, split_test)
 ```
 
@@ -203,7 +216,7 @@ lasso_grid <- tune_grid(wf %>% add_model(tune_spec),
 # see the grid and collect best gird option
 lasso_grid %>% collect_metrics()
 
-low_acc <- lasso_grid %>% select_best(metric = "roc_auc", penalty)
+low_acc <- lasso_grid %>% select_best(metric = "accuracy", penalty)
 
 final_fit_lasso<- finalize_workflow(wf %>% add_model(tune_spec), 
                              low_acc)
@@ -236,11 +249,12 @@ library(vip)
 
 final_fit_lasso %>% fit(split_train) %>% 
   pull_workflow_fit() %>% 
-  vi(lambda = low_rsq$penalty) %>% 
+  vi(lambda = low_acc$penalty) %>% 
   mutate(
     Importance  = abs(Importance), 
-    Var = fct_reorder(Variable, Importance)
-  ) %>% filter(Importance > 0.4) %>% 
+    Var = fct_reorder(Variable, Importance)) -> lasso_importance
+
+lasso_importance %>% filter(Importance > 0) %>% 
   ggplot(mapping = aes(x = Importance, y = Var, fill = Sign)) + 
   geom_col() + 
   scale_x_continuous() + 
@@ -255,6 +269,7 @@ final_fit_lasso %>% fit(split_train) %>%
 ```{r}
 pred <- last_fit(final_fit_lasso, split_initial) 
 
+
 pred %>% collect_metrics()
 ```
 
@@ -267,11 +282,11 @@ pred %>% collect_metrics()
 
 # ridge model specs
 
-ridge_initial_spec <- linear_reg(penalty = 0.1, 
+ridge_initial_spec <- logistic_reg(penalty = 0.1, 
                                    mixture = 0) %>% 
   set_engine("glmnet") %>% 
-  set_mode("regression") %>% 
-  set_args(family = "gaussian") 
+  set_mode("classification") %>% 
+  set_args(family = "binomial") 
 
 ridge_initial_spec %>% translate()
 ```
@@ -298,11 +313,11 @@ set.seed(2020)
 
 olim_resample_boot <- bootstraps(train_data, breaks = 4)
 
-tune_ridge_spec <- linear_reg(penalty = tune(), 
+tune_ridge_spec <- logistic_reg(penalty = tune(), 
                                 mixture = 0) %>% 
   set_engine("glmnet") %>% 
-  set_mode("regression") %>% 
-  set_args(family = "gaussian")
+  set_mode("classification") %>% 
+  set_args(family = "binomial")
 
 penalty_grid_ridge <- grid_regular(penalty(), levels = 20 )
 ```
@@ -329,10 +344,30 @@ ridge_grid %>% collect_metrics()
 # select model and finalize wf()
 
 low_roc_ridge <- ridge_grid %>% 
-  select_best(metric = "rsq", penalty) 
+  select_best(metric = "accuracy", penalty) 
 
 final_fit_ridge <- finalize_workflow(wf %>% add_model(tune_ridge_spec), 
                                      low_roc_ridge)
+```
+
+
+```{r}
+
+final_fit_ridge %>% fit(split_train) %>% 
+  pull_workflow_fit() %>% 
+  vi(lambda = low_roc_ridge$penalty) %>% 
+  mutate(
+    Importance  = abs(Importance), 
+    Var = fct_reorder(Variable, Importance)) -> ridge_importance 
+
+ridge_importance %>% # filter(Importance > 0.35) %>% 
+  ggplot(mapping = aes(x = Importance, y = Var, fill = Sign)) + 
+  geom_col() + 
+  scale_x_continuous() + 
+  theme(
+    axis.text.x = element_text(angle = 90, 
+                               hjust = 1)
+    )
 ```
 
 
@@ -353,11 +388,11 @@ pred_ridge %>% collect_metrics()
 
 # eNet model specs
 
-enet_spec <- multinom_reg(penalty = 0.1, 
+enet_spec <- logistic_reg(penalty = 0.1, 
                                    mixture = 0.4) %>% 
   set_engine("glmnet") %>% 
   set_mode("classification") %>% 
-  set_args(family = "multinomial") 
+  set_args(family = "binomial") 
 
 enet_spec %>% translate()
 ```
@@ -384,15 +419,15 @@ set.seed(2020)
 
 olim_resample_boot <- bootstraps(train_data, breaks = 2)
 
-tune_enet_spec <- multinom_reg(penalty = tune(), 
+tune_enet_spec <- logistic_reg(penalty = tune(), 
                                 mixture = tune()) %>% 
   set_engine("glmnet") %>% 
   set_mode("classification") %>% 
-  set_args(family = "multinomial")
+  set_args(family = "binomial")
 
 penalty_enet_grid <- grid_regular(penalty(), 
                                   mixture(), 
-                                  levels = 3 )
+                                  levels = 10 )
 ```
 
 
@@ -425,7 +460,24 @@ final_fit_enet <- finalize_workflow(wf %>% add_model(tune_enet_spec),
 
 
 ```{r}
+final_fit_enet %>% fit(split_train) %>% 
+  pull_workflow_fit() %>% 
+  vi(lambda = low_roc_enet$penalty) %>% 
+  mutate(
+    Importance  = abs(Importance), 
+    Var = fct_reorder(Variable, Importance)) -> enet_importance 
 
+enet_importance %>% # filter(Importance > 0.35) %>% 
+  ggplot(mapping = aes(x = Importance, y = Var, fill = Sign)) + 
+  geom_col() + 
+  scale_x_continuous() + 
+  theme(
+    axis.text.x = element_text(angle = 90, 
+                               hjust = 1))
+```
+
+
+```{r}
 # final model
 pred_enet<- last_fit(final_fit_enet, split_initial)
 
@@ -435,6 +487,8 @@ pred_enet %>% collect_metrics()
 ********************************************
 
 ### fix issues :: Superseded
+
+
 <!-- 
 ```{r}
 fit_glm = glmnet(maybe_matrix(split_train[,-1]), 
@@ -486,6 +540,23 @@ for (i in 1:dim(pred_df)[1]) {
 ```
 --> 
 
+# Variable Importance
 
+```{r}
+ridge_importance %>% head()
+# 0.1
+lasso_importance %>% head()
+# 5
+enet_importance %>% head( )
+# 4
+```
+```{r}
+semi_join(x = ridge_importance %>% slice_max(Importance,n = 50), 
+          y = enet_importance %>% slice_max(Importance, n = 50), 
+          by = 'Variable') %>% semi_join(y = lasso_importance %>% 
+                                           slice_max(Importance , n = 50), 
+                                         by = "Variable") %>% 
+  select(1) 
+```
 
 
