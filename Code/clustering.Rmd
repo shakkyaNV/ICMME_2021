@@ -18,12 +18,22 @@ library(factoextra)
 
 
 ```{r}
-df_cluster<-read.csv("D:/Stat/ICMME/Data/heavy/df_fixed.csv")
+df_cluster<-read.csv("../Data/heavy/df_fixed.csv")
+```
+
+
+
+```{r}
+#ENR, PRE, PRM, SEC, TER
+#Extracting educational indices
+list<-(df_cluster %>% names())[df_cluster %>% names()%>% str_starts("SE.ENR|SE.PRE|SE.PRM|SE.SEC|SE.TER")]
+
+df_cluster_selected<-df_cluster %>% select(any_of(list),'TF','Code')
 ```
 
 
 ```{r}
-df_cluster_mean<-df_cluster %>% select(-c(1,3)) %>% group_by(Code) %>%
+df_cluster_mean<-df_cluster_selected %>% group_by(Code) %>%
   summarise_all(mean)
 
 df_cluster_scaled<- scale(df_cluster_mean[,-1])
@@ -35,23 +45,42 @@ df_cluster_scaled<- scale(df_cluster_mean[,-1])
 fviz_nbclust(df_cluster_scaled, kmeans, method = "silhouette")+
   labs(subtitle = "Silhouette method")
 
+```
+
+```{r}
 #k-means clustering (k=3)
-set.seed(8085)
-model_kmeans<-kmeans(df_cluster_scaled, centers = 3)
+set.seed(1080)
+model_kmeans<-kmeans(df_cluster_scaled, centers = 2)
 row.names(df_cluster_scaled)<-df_cluster_mean$Code
 ```
 
 
+
 ```{r}
+library(ggrepel)
 #Visualization
-fviz_cluster(model_kmeans, data = df_cluster_scaled )
+fviz_cluster(model_kmeans, data = df_cluster_scaled, labelsize = 0 , color=TF)+
+ geom_label_repel(aes(label=rownames(df_cluster_scaled)), size=2, nudge_y = 0.1)
+
 
 ```
+
+```{r}
+#mean of all variables by clusters
+df_cluster_mean %>% select(-1) %>% mutate(Cluster=model_kmeans$cluster) %>%
+  group_by(Cluster) %>% summarise_all(mean)
+```
+
 
 ```{r}
 data.frame(
   "cluster_no"= model_kmeans$cluster,
-  "landuse"= row.names(df_cluster_scaled)
+  "country_code"= row.names(df_cluster_scaled)
   )%>% arrange(cluster_no)
 ```
+
+```{r}
+
+```
+
 
