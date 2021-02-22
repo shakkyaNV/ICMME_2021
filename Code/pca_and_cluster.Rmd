@@ -1,0 +1,113 @@
+---
+title: "PCA and Cluster"
+author: "eNVy"
+date: "`r Sys.Date()`"
+output: github_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, comment = NULL)
+# knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
+```
+
+
+```{r libs, warning=F, message=F}
+library(tidyverse)
+library(magrittr)
+library(tidymodels)
+library(ggrepel)
+library(ggfortify)
+library(reshape2)
+library(fpc)
+```
+
+# Load the datasets
+
+```{r}
+# df_for_logistic_reg from glm-tests
+
+# test read and raw read
+
+raw_fixed <- read_csv("../Data/heavy/df_fixed.csv", col_types = cols( 
+  TF = col_character(), 
+  Code = col_character(), 
+  .default = col_double()
+))
+
+# remove columns of categorical vars
+raw_fixed %>%  
+  select(-any_of(c('TF', 'notNAProp'))) -> df_pca
+```
+
+
+```{r}
+
+df_pca %<>% 
+  filter(Year == 2017) %>% 
+  select(matches("SE.SEC|SE.TER|SE.XPD|SE.PRM|SE.PRE|SE.ENR|SE.ADT|Code"))  %>% 
+  column_to_rownames(var = 'Code') %>% 
+  scale() 
+
+```
+
+<!-- content copied from 'https://juliasilge.com/blog/health-care-indicators/'
+--> 
+
+# easy pca
+```{r}
+imo_pca <- prcomp(df_pca)
+
+melted <- melt(imo_pca$rotation[,1:6])
+ggplot(data = melted) +
+        theme(legend.position = "none", axis.text.x = element_blank(), 
+              axis.ticks.x = element_blank()) + 
+        xlab("Educational indices") +
+        ylab("Relative importance in each principle component") +
+        ggtitle("Variables in Principal Component Analysis") +
+        geom_bar(aes(x=Var1, y=value, fill=Var1), stat="identity") +
+        facet_wrap(~Var2)
+```
+
+
+```{r}
+melted %>% 
+  filter(Var2 == "PC1") %>% 
+  arrange(value) %>% 
+  ggplot() +
+         theme(legend.position = "none", 
+               axis.text.x= element_text(angle= 90, hjust = 1), 
+               axis.ticks.x = element_blank()) + 
+         xlab("Eucational indicator measurements") +
+         ylab("Relative importance in principle component") +
+         ggtitle("Variables in PC1") +
+         geom_bar(aes(x=Var1, y=value, fill=Var1), stat="identity")
+```
+
+# Cluster the pca components in df_pca
+
+```{r}
+imo_kmeans <- kmeansruns(df_pca, krange = 1:5)
+
+kmeans <-  kmeans(df_pca, 3)
+```
+
+
+```{r}
+# winning countries in 2017
+
+code_list <- raw_fixed %>% filter(Year == 2017, TF == 1) %>% 
+  pull(Code) %>% unique()
+
+autoplot(kmeans, data = df_pca , size = 1, aes = 0.8) + 
+  # geom_jitter(alpha = 0.3, width = 0.01, 
+  #             height = 0.01,
+  #             aes(color = factor(kmeans$cluster))) +
+        ggtitle("K-Means Clustering of Utah Counties") +
+        theme(legend.position="none") +
+        geom_label_repel( aes(PC1, PC2,
+                             fill = factor(kmeans$cluster),
+                             label = row.names(df_pca)),
+                         fontface = 'bold', color = 'white',
+                         box.padding = unit(0.5, "lines"))
+```
+

@@ -10,6 +10,8 @@ knitr::opts_chunk$set(echo = TRUE, comment = NULL)
 # knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
 ```
 
+calibrate with [https://konradsemsch.netlify.app/2019/10/testing-the-tune-package-from-tidymodels-analysing-the-relationship-between-the-upsampling-ratio-and-model-performance/]
+
 ```{r libs, warning=F, message=F}
 library(tidyverse)
 library(magrittr)
@@ -102,13 +104,13 @@ Things to do before recipe
 
 olim_recipe <- recipe(TF ~., data = split_train) %>% 
   step_normalize(all_numeric(), -all_outcomes()) %>% 
-  themis::step_upsample(TF) %>% 
+  themis::step_upsample(TF) %>%  # use over_ration = tune() # from yardstick
   # step_ordinalscore(all_nominal()) %>% 
   # update_role(TF, new_role = "outcome") %>% 
   # step_dummy(all_outcomes(), -all_numeric()) %>%  
-  step_nzv(all_predictors()) %>% 
+  # step_nzv(all_predictors()) %>% 
   step_zv(all_predictors()) %>% 
-  prep(training = split_train, retain = T)
+  prep(split_train, retain = T)
   
 # olim_recipe <- prep(olim_recipe, training = split_train, retain = T)
   
@@ -186,7 +188,7 @@ table(lasso_fit_object$outcomes$notNAProp, split_train$notNAProp)
 ```{r}
 set.seed(2020)
 
-olim_resample_boot <- bootstraps(train_data, breaks = 5)
+olim_cv <- vfold_cv(train_data, repeats = 5, strata = "TF")
 
 tune_spec <- logistic_reg(penalty = tune(), 
                         mixture = 1) %>% 
@@ -194,7 +196,10 @@ tune_spec <- logistic_reg(penalty = tune(),
   set_mode("classification") %>% 
   set_args(family = "binomial")
 
-penalty_grid <- grid_regular(penalty(), levels = 20)
+penalty_grid <- grid_regular(penalty(), levels = 2)
+
+
+
 ```
 
 
@@ -205,9 +210,10 @@ doParallel::registerDoParallel()
 set.seed(123)
 
 lasso_grid <- tune_grid(wf %>% add_model(tune_spec), 
-                        resamples = olim_resample_boot, 
-                        grid = penalty_grid)
-
+                        resamples = olim_cv, 
+                        grid = penalty_grid,
+                        metrics = metric_set(roc_auc, accuracy, f_meas))
+# give more metrics here metrics_set() from yardstick
 ```
 
 
@@ -216,7 +222,7 @@ lasso_grid <- tune_grid(wf %>% add_model(tune_spec),
 # see the grid and collect best gird option
 lasso_grid %>% collect_metrics()
 
-low_acc <- lasso_grid %>% select_best(metric = "accuracy", penalty)
+low_acc <- lasso_grid %>% select_best(metric = "f_meas", penalty)
 
 final_fit_lasso<- finalize_workflow(wf %>% add_model(tune_spec), 
                              low_acc)
@@ -260,8 +266,7 @@ lasso_importance %>% filter(Importance > 0) %>%
   scale_x_continuous() + 
   theme(
     axis.text.x = element_text(angle = 90, 
-                               hjust = 1)
-    )
+                               hjust = 1))
 ```
 
 ## Final test fit and check metrics
@@ -271,6 +276,12 @@ pred <- last_fit(final_fit_lasso, split_initial)
 
 
 pred %>% collect_metrics()
+
+caret::confusionMatrix(as.factor(split_test$TF), pred$.predictions[[1]]$.pred_class)
+```
+
+```{r}
+break
 ```
 
 ********************************************
@@ -551,12 +562,63 @@ enet_importance %>% head( )
 # 4
 ```
 ```{r}
-semi_join(x = ridge_importance %>% slice_max(Importance,n = 50), 
-          y = enet_importance %>% slice_max(Importance, n = 50), 
+important_vars_rf <- read_csv("../Data/var_imp_randF.csv")
+important_vars_rf %<>% select(-X1)
+
+
+important_vars <- semi_join(x = ridge_importance %>% slice_max(Importance,n = 100), 
+          y = enet_importance %>% slice_max(Importance, n = 100), 
           by = 'Variable') %>% semi_join(y = lasso_importance %>% 
-                                           slice_max(Importance , n = 50), 
+                                           slice_max(Importance , n = 100), 
                                          by = "Variable") %>% 
-  select(1) 
+  semi_join(y = important_vars_rf %>% slice_max(Importance, n = 100), 
+            by = "Variable") %>% 
+  select(1,3) 
+
+# api_8_and _4 indicators from test_full_merge_ICMME
+
+indices_info <- bind_rows(API_4_indicator %>% select(1,2), 
+                          API_8_indicator %>% select(1,2)) %>% 
+  rename("Variable" = "INDICATOR_CODE")
 ```
+
+
+```{r}
+important_vars_rf %>% 
+  left_join(indices_info, by = "Variable") %>% View()
+
+# write_csv("../Data/imp_vars.csv")
+
+lasso_importance %>% 
+  left_join(indices_info, by = "Variable") %>% View()
+```
+
+
+# Important Variables from RandF
+
+```{r}
+var_imp_ggplot <- important_vars_rf %>% 
+  left_join(y  = indices_info, by = "Variable") %>% 
+  slice_max(Importance, n = 30) %>% 
+  select(-1) %>% 
+  unique() %>% 
+  ggplot(aes(x = reorder(INDICATOR_NAME, Importance),Importance, 
+             fill = Importance)) + 
+  geom_bar(stat = "identity") + 
+  scale_fill_viridis_c(option = "viridis", begin = 0.7, end = 0) + 
+  labs(y = "Index Importace", x = "Index") + 
+  theme_grey() + 
+  theme(axis.text.x = 
+          element_text(angle = 90, hjust = 0), 
+        legend.position = "none") + 
+  coord_flip() 
+
+
+```
+
+
+
+
+
 
 
