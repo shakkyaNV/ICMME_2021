@@ -4,6 +4,15 @@ author: "eNVy"
 date: "`r Sys.Date()`"
 output: github_document
 ---
+<!-- some changes were done to the code after finalizing the project. 
+Especially in; 
+  Recipe
+  Grid search
+  recipe (themis::up_sample)
+  final importances
+  Took inputs from other Rmarkdown files
+Hence the commands won't run on first try
+  -->
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, comment = NULL)
