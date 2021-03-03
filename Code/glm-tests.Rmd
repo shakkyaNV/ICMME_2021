@@ -13,13 +13,21 @@ Especially in;
   Took inputs from other Rmarkdown files
 Hence the commands won't run on first try
   -->
+  
+To do
+
+  + Some problems in themis::up_sample 
+    + Calibrate the probabilities (Use tune() in recipe), and then adjust the y_preds in fit
+    + Follow [this tutorial][https://konradsemsch.netlify.app/2019/10/testing-the-tune-package-from-tidymodels-analysing-the-relationship-between-the-upsampling-ratio-and-model-performance/]
+  + Do calibrate procedure for all models
+  + Optimize the procedure if possible.
+    
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE, comment = NULL)
 # knitr::opts_chunk$set(warning = F, message = F) # Un-comment at the end
 ```
 
-calibrate with [https://konradsemsch.netlify.app/2019/10/testing-the-tune-package-from-tidymodels-analysing-the-relationship-between-the-upsampling-ratio-and-model-performance/]
 
 ```{r libs, warning=F, message=F}
 library(tidyverse)
@@ -110,16 +118,19 @@ Things to do before recipe
   
 ```{r}
 # recipe
-
 olim_recipe <- recipe(TF ~., data = split_train) %>% 
+  # normalize all variables
   step_normalize(all_numeric(), -all_outcomes()) %>% 
-  themis::step_upsample(TF) %>%  # use over_ration = tune() # from yardstick
+  # use recipe::tunable_step_upsample or 
+  # themis::step_upsample(over_ratio = tune()), then tune when preping
+  themis::step_upsample(TF) %>%  # tune() from yardstick
   # step_ordinalscore(all_nominal()) %>% 
   # update_role(TF, new_role = "outcome") %>% 
   # step_dummy(all_outcomes(), -all_numeric()) %>%  
-  # step_nzv(all_predictors()) %>% 
+  # remove all variable with zero variance
   step_zv(all_predictors()) %>% 
   prep(split_train, retain = T)
+  # the difference of preping recipe and passing the process only?
   
 # olim_recipe <- prep(olim_recipe, training = split_train, retain = T)
   
@@ -153,8 +164,7 @@ wf <- workflow() %>%
 # model specs
 lasso_spec <- logistic_reg(penalty = 0.1, mixture = 1) %>% 
   set_engine("glmnet") %>% 
-  set_mode("classification") # %>% 
-  # set_args(family = "gaussian") # %>% set_args(type = "response")
+  set_mode("classification")
 
 # model specification in detail
 lasso_spec %>% translate()
@@ -186,12 +196,10 @@ lasso_fit %>% pull_workflow_fit() %>%
 
 ```{r}
 # pull metrics # classified class in train
-lasso_fit_object <- (lasso_fit %>% pull_workflow_mold())
-
-# confusion matrix for train
-table(lasso_fit_object$outcomes$notNAProp, split_train$notNAProp)
-# huh?
+lasso_fit_object <- (lasso_fit %>% 
+                       pull_workflow_mold())
 ```
+
 ### Parameter tune and finalize workflow
 
 ```{r}
@@ -287,10 +295,6 @@ pred <- last_fit(final_fit_lasso, split_initial)
 pred %>% collect_metrics()
 
 caret::confusionMatrix(as.factor(split_test$TF), pred$.predictions[[1]]$.pred_class)
-```
-
-```{r}
-break
 ```
 
 ********************************************
